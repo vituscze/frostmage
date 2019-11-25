@@ -1,0 +1,2384 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Fast Fun</title>
+    <style>
+        body { background: #0e0e0e; font-family: Arial; color: #DDDDDD; }
+        canvas { display: block; margin: 0 auto; }
+        input[type="range"] { height: 7px; }
+        div.toggle { max-width: 1000px; }
+        ul.toggle { margin: 0; list-style-type: none; }
+        .toggle ul { padding-right: 20px; }
+        .exp { color: #999999; }
+        .toggle { font-size: 90%; padding: 20px; position: fixed; background: rgb(0, 0, 0, 0.9); max-height: 75%; overflow-y: auto; }
+        .tooltip { background: #222222; padding: 6px 12px; font-size: 75%; }
+        .tooltip-left:before { content: " "; position: absolute; top: 7px; right: 100%; border-width: 6px; border-style: solid; border-color: transparent #222222 transparent transparent; }
+    </style>
+</head>
+<body>
+<div id="tooltip" class="tooltip tooltip-left" style="z-index: 50; display: none; position: fixed"></div>
+<div id="spellTooltip" class="tooltip" style="z-index: 50; display: none; position: fixed; bottom: 50px; right: 50px; width: 400px">
+    <span id="spellName" style="font-size: 125%; font-weight: bold"></span>
+    <br/>
+    <span id="spellCast"></span>
+    <span id="spellCd" style="float: right; color: inherit"></span>
+    <br/>
+    <span id="spellDesc" style="white-space: pre-line; color: #FFD200"></span>
+    <br/>
+    <span id="spellCharges"></span>
+</div>
+<div id="buffTooltip" class="tooltip" style="z-index: 50; display: none; position: fixed; max-width: 300px">
+    <span id="buffName" style="font-size: 125%; font-weight: bold; color: #FFD200"></span>
+    <br/>
+    <span id="buffDesc" style="white-space: pre-line"></span>
+    <br/>
+    <span id="buffRem" style="color: #FFD200"></span>
+</div>
+<img src="https://wow.zamimg.com/images/wow/icons/large/trade_engineering.jpg" style="position: fixed; left: 10px; top: 10px" onclick="toggle(event)">
+<ul class="toggle" style="display: none; left: 10px; top: 70px">
+    <li><input type="checkbox" id="tooltips" checked> Tooltips</li>
+    <li><input type="checkbox" id="stats"> <span tooltip="Shows detailed ability and proc breakdowns once the combat starts">Detailed stats</span></li>
+    <li><input type="checkbox" id="glacialSpike" checked> Glacial Spike</li>
+    <li><input type="checkbox" id="freezingRain"> Freezing Rain</li>
+    <li><input type="checkbox" id="lonelyWinter"> Lonely Winter</li>
+    <li><input type="checkbox" id="aoeSpells"> <span tooltip="Adds Blizzard and Cone of Cold to the ability bar">AoE spells</span></li>
+    <li><input type="checkbox" id="munchProtection" checked> <span tooltip="Ice Lance cast immediately after Flurry will not consume nor benefit from Fingers of Frost">Ignore FoF after Flurry</span></li>
+    <li><input type="checkbox" id="ai"> Artificial intelligence</li>
+    <li><input type="range" min="-15" max="30" value="0" id="speedFactor"> Game speed</li>
+    <li><input type="range" min="1" max="20" value="1" id="targetCount"> Targets</li>
+    <li><input type="range" min="0" max="100" value="28" id="crit"> Crit</li>
+    <li><input type="range" min="0" max="100" value="24" id="haste"> Haste</li>
+    <li><input type="range" min="0" max="200" value="40" id="mastery"> Mastery</li>
+    <li><input type="range" min="1" max="60" value="20" id="flurryCd"> Flurry cooldown</li>
+    <li><input type="range" min="1" max="10" value="2" id="flurryCharges"> Flurry charges</li>
+    <li><input type="range" min="0" max="100" value="30" id="bfChance"> Brain Freeze proc chance</li>
+    <li><input type="range" min="0" max="100" value="50" id="bfRecharge"> Brain Freeze recharge</li>
+    <li><input type="range" min="0" max="300" value="50" id="ivRecharge"> Icy Veins recharge bonus</li>
+    <li><hr></li>
+    <li class="exp"><input type="checkbox" id="aoeWc"> <span tooltip="Flurry applies Winter's Chill to all targets">AoE Winter's Chill</span></li>
+    <li class="exp"><input type="checkbox" id="bfDelay"> <span tooltip="Brain Freeze is delayed when Flurry has one or more charges">Brain Freeze delay</span></li>
+    <li class="exp"><input type="checkbox" id="cocBuff"> <span tooltip="Periodically triggers a buff that increases the damage of the next Cone of Cold">Cone of Cold buff</span></li>
+    <li class="exp"><input type="checkbox" id="focusBuff"> <span tooltip="Casting three Frostbolts in a row increases Ice Lance damage">Frost Focus buff</span></li>
+    <li class="exp"><input type="checkbox" id="focusFof"> <span tooltip="Casting three Frostbolts in a row grants Fingers of Frost">Frost Focus FoF</span></li>
+    <li class="exp"><input type="checkbox" id="shatterlance"> <span tooltip="Ice Lance cast immediately after Frostbolt deals additional damage">Shatterlance</span></li>
+    <li class="exp"><input type="checkbox" id="experimentalSpells"> <span tooltip="Adds experimental spells to the ability bar">Experimental spells</span></li>
+    <li class="exp"><input type="checkbox" id="timeline"> DPS timeline</li>
+    <li class="exp"><input type="range" min="10" max="300" value="60" id="samples"> Moving average samples</li>
+    <li class="exp"><input type="range" min="-50" max="60" value="0" id="slice"> Time slice</li>
+</ul>
+<canvas id="display" width="1800" height="900"></canvas>
+<img src="https://wow.zamimg.com/images/wow/icons/large/inv_misc_questionmark.jpg" style="position: fixed; top: 10px; right: 10px" onclick="toggle(event)">
+<div class="toggle" style="display: none; top: 70px; right: 10px">
+    <p>
+        This demonstration showcases a couple of changes that address Frost mage gameplay issues.
+    </p>
+    <p>
+        Cast spells by clicking the ability buttons or pressing the keybinds. You can change a keybind by shift-clicking
+        an ability button and pressing a key. Modifier keys are not supported.
+    </p>
+    <p>Major changes:</p>
+    <ul style="font-weight: bold; color: white">
+        <li>Flurry is an instant cast with 2 charges and causes next Ice Lance to not consume Fingers of Frost</li>
+        <li>Brain Freeze grants half of a Flurry charge</li>
+        <li>Mastery no longer increases Icicle damage and instead increases damage done to frozen targets</li>
+        <li>Blizzard activates Splitting Ice for 15 s</li>
+    </ul>
+    <p>Minor changes:</p>
+    <ul>
+        <li>Icy Veins last 30 s and increase Flurry recharge rate</li>
+        <li>Frostbolt deals 20% additional damage to frozen targets</li>
+        <li>Flurry no longer generates Icicles and instead launches them</li>
+    </ul>
+    <p>Goals:</p>
+    <ul>
+        <li>Flurry changes provide agency over the rotation and protection against bad luck streaks</li>
+        <li>Mastery no longer pushes Ice Lance out of rotation</li>
+        <li>Two target niche no longer depends solely on a talent</li>
+        <li>Icy Veins' strength now matches its longer cooldown</li>
+        <li>Properly performing Shatter combos is emphasized</li>
+    </ul>
+</div>
+<script>
+
+var canvas = document.getElementById("display");
+var ctx = canvas.getContext("2d");
+ctx.font = "20px Arial";
+ctx.strokeStyle = "black";
+ctx.fillStyle = "white";
+ctx.lineWidth = 2;
+
+var t = 0.0;
+var delta = 0.0;
+var eventId = 0;
+
+var uiX = 550;
+var uiY = 500;
+var uiW = 700;
+
+function round(x, p = 0) {
+    return Math.round(x * 10**p) / 10**p;
+}
+
+function timeString(x, long = false) {
+    x /= 1000;
+    if (long) {
+        if (x > 3600) {
+            return Math.ceil(x / 3600) + " hours";
+        } else if (x > 60) {
+            return Math.ceil(x / 60) + " minutes";
+        } else {
+            var r = Math.ceil(x);
+            return r + (r == 1 ? " second" : " seconds");
+        }
+    } else {
+        if (x >= 3600) {
+            return round(x / 3600, 1) + " hour";
+        } else if (x >= 60) {
+            return round(x / 60, 1) + " min";
+        } else {
+            return round(x, 1) + " sec";
+        }
+    }
+}
+
+function pctString(x) {
+    return Math.round(100 * x) + "%";
+}
+
+function secString(x) {
+    return Math.round(x / 1000) + " s";
+}
+
+var inputChanged = true;
+
+function linkSlider(assign, name, mult, string) {
+    var el = document.getElementById(name);
+    var span = document.getElementById(name + "_val");
+    if (!span) {
+        span = document.createElement("span");
+        span.id = name + "_val";
+        el.parentElement.appendChild(span);
+    }
+
+    var val = mult * el.value;
+    span.innerText = " (" + string(val) + ")";
+    assign(val);
+
+    el.addEventListener("input", function(e) {
+        var val = mult * el.value;
+        span.innerText = " (" + string(val) + ")";
+        assign(val);
+        inputChanged = true;
+    });
+}
+
+function linkCheckbox(assign, name) {
+    var el = document.getElementById(name);
+    assign(el.checked);
+    el.addEventListener("change", function(e) {
+        assign(this.checked);
+        inputChanged = true;
+    });
+}
+
+function toggle(event) {
+    var el = event.currentTarget.nextElementSibling;
+    if (el.style.display == "none") {
+        el.style.display = "block";
+    } else {
+        el.style.display = "none";
+    }
+}
+
+var enableTooltips;
+linkCheckbox(function(x) { enableTooltips = x; }, "tooltips");
+
+var tt = document.getElementById("tooltip");
+function ttShow(event) {
+    if (!enableTooltips) {
+        return;
+    }
+    tt.textContent = this.getAttribute("tooltip");
+    var srcRect = this.getBoundingClientRect();
+    tt.style.top = (srcRect.top - 3) + "px";
+    tt.style.left = (srcRect.right + 15) + "px";
+    tt.style.display = "block";
+}
+function ttHide(event) {
+    tt.style.display = "none";
+}
+for (var el of document.getElementsByTagName("*")) {
+    if (el.getAttribute("tooltip")) {
+        el.addEventListener("mouseover", ttShow);
+        el.addEventListener("mouseout", ttHide);
+    }
+}
+
+var ttSpell = null;
+var ttSpellElement = document.getElementById("spellTooltip");
+var ttSpellName = document.getElementById("spellName");
+var ttSpellCast = document.getElementById("spellCast");
+var ttSpellCd = document.getElementById("spellCd");
+var ttSpellDesc = document.getElementById("spellDesc");
+var ttSpellCharges = document.getElementById("spellCharges");
+
+var ttBuff = null;
+var ttBuffElement = document.getElementById("buffTooltip");
+var ttBuffName = document.getElementById("buffName");
+var ttBuffDesc = document.getElementById("buffDesc");
+var ttBuffRem = document.getElementById("buffRem");
+
+var mouseX = -1;
+var mouseY = -1;
+
+var abilityBar = [];
+var buffBar = [];
+
+function updateTooltip(force) {
+    if (!enableTooltips) {
+        ttSpellElement.style.display = "none";
+        ttBuffElement.style.display = "none";
+        ttSpell = null;
+        ttBuff = null;
+        return;
+    }
+
+    var rect = canvas.getBoundingClientRect();
+    var moveX = mouseX - rect.left;
+    var moveY = mouseY - rect.top;
+
+    var newTtSpell = null;
+    for (var b of abilityBar) {
+        if (b.x1 <= moveX && moveX <= b.x2 && b.y1 <= moveY && moveY <= b.y2) {
+            newTtSpell = b.ability;
+            break;
+        }
+    }
+    var newTtBuff = null;
+    var buffX = 0;
+    var buffY = 0;
+    for (var b of buffBar) {
+        if (b.x1 <= moveX && moveX <= b.x2 && b.y1 <= moveY && moveY <= b.y2) {
+            newTtBuff = b.buff;
+            buffX = rect.left + b.x2 + 10;
+            buffY = rect.top + b.y2 + 10;
+            break;
+        }
+    }
+
+    if (force || newTtSpell != ttSpell || newTtBuff != ttBuff) {
+        ttSpell = newTtSpell;
+        ttBuff = newTtBuff;
+        if (ttSpell) {
+            ttSpellElement.style.display = "block";
+            ttSpellName.textContent = ttSpell.name;
+            ttSpellCast.textContent = ttSpell.castTime() == 0 ? "Instant" : timeString(ttSpell.castTime()) + " cast";
+            ttSpellCd.textContent = ttSpell.cooldown ? timeString(ttSpell.cooldown.duration) + (ttSpell.cooldown.chargesMax > 1 ? " recharge" : " cooldown") : "";
+            ttSpellCd.style.color = ttSpell.cooldown && ttSpell.cooldown.duration < ttSpell.cooldown.baseDuration ? "#00FF00" : "inherit";
+            ttSpellDesc.textContent = ttSpell.description();
+            ttSpellCharges.textContent = ttSpell.cooldown && ttSpell.cooldown.chargesMax > 1 ? "Max " + ttSpell.cooldown.chargesMax + " charges" : "";
+        } else {
+            ttSpellElement.style.display = "none";
+        }
+        if (ttBuff && ttBuff.stack > 0) {
+            ttBuffElement.style.display = "block";
+            ttBuffElement.style.left = buffX + "px";
+            ttBuffElement.style.top = buffY + "px";
+            ttBuffName.textContent = ttBuff.name;
+            ttBuffDesc.textContent = ttBuff.description();
+            ttBuffRem.textContent = ttBuff.duration < 1e8 ? timeString(ttBuff.remains(), true) + " remaining" : "";
+        } else {
+            ttBuffElement.style.display = "none";
+        }
+    }
+}
+
+var distance = 30;
+
+var events = [];
+var combatLog = [];
+
+var stats = {};
+stats.intellect = 22399 * 1.02 * 1.05;
+linkSlider(function(x) { stats.crit = x; }, "crit", 0.01, pctString);
+linkSlider(function(x) { stats.haste = x; }, "haste", 0.01, pctString);
+linkSlider(function(x) { stats.mastery = x; }, "mastery", 0.01, pctString);
+stats.vers = 0.1923;
+
+var hasteMult = 1.0 / (1.0 + stats.haste);
+var siTargets = 2;
+
+var queuedSpell = null;
+var lastSpell = null;
+var castSpell = null;
+var castStart = 0;
+var castEnd = 0;
+var gcdStart = 0;
+var gcdEnd = 0;
+
+var lastBf = null;
+var fofFade = [];
+var bfFade = 0.0;
+
+var cooldowns = [];
+
+var lastSpent = 0.0;
+var waiting = true;
+var waitTime = 0.0;
+var totalDmg = 0.0;
+var frozenDmg = 0.0;
+var breakdown = {};
+var timeSpent = {};
+var frozenIlFof = 0;
+var frozenIlWc = 0;
+var frozenIs = 0;
+
+var keyBindSpell = null;
+var expireBuff = null;
+
+var targetCount;
+linkSlider(function(x) { targetCount = x; }, "targetCount", 1, function(x) { return x; });
+var aoeWc;
+linkCheckbox(function(x) { aoeWc = x; }, "aoeWc");
+
+var focusBuff;
+linkCheckbox(function(x) { focusBuff = x; }, "focusBuff");
+var focusFof;
+linkCheckbox(function(x) { focusFof = x; }, "focusFof");
+
+function buff(name, stacks, duration, icon) {
+    this.name = name;
+    this.stacksMax = stacks;
+    this.baseDuration = duration;
+    this.description = function() {
+        return "";
+    };
+
+    this.duration = duration;
+    this.stack = 0;
+    this.triggerCount = 0;
+    this.triggerTime = 0;
+    this.quiet = false;
+
+    this.affectsHaste = false;
+
+    this.onExpiration = null;
+    this.expireEvent = null;
+
+    this.trigger = function(duration) {
+        if (this.stack == 0) {
+            this.triggerTime = t;
+        }
+
+        var oldStack = this.stack;
+        this.stack = Math.min(this.stacksMax, this.stack + 1);
+
+        this.duration = duration || this.baseDuration;
+        this.triggerCount++;
+        if (this.stack > oldStack && this.affectsHaste) {
+            updateHaste();
+        }
+        if (this.expireEvent) {
+            moveEvent(t + this.duration, this.expireEvent);
+        } else {
+            var b = this;
+            this.expireEvent = addEvent(t + this.duration, function() {
+                b.stack = 0;
+                b.expireEvent = null;
+                if (b.affectsHaste) {
+                    updateHaste();
+                }
+                if (b.onExpiration) {
+                    b.onExpiration();
+                }
+            });
+        }
+    };
+
+    this.expire = function(all) {
+        if (all) {
+            this.stack = 0;
+        } else {
+            this.stack = Math.max(0, this.stack - 1);
+        }
+
+        if (this.expireEvent) {
+            if (this.stack == 0) {
+                removeEvent(this.expireEvent);
+                this.expireEvent.execute();
+            } else if (this.affectsHaste) {
+                updateHaste();
+            }
+        }
+    };
+
+    this.remains = function() {
+        if (this.expireEvent) {
+            return Math.max(0, this.expireEvent.time - t);
+        } else {
+            return 0;
+        }
+    };
+
+    this.img = new Image();
+    this.img.src = icon;
+}
+
+function cooldown(charges, duration) {
+    this.chargesMax = charges;
+    this.baseDuration = duration;
+    this.recharge = 0;
+
+    this.wastedTracker = 0;
+    this.normalTracker = 0;
+    this.lastUpdated = 0;
+
+    this.duration = this.baseDuration;
+
+    this.currentCharges = function() {
+        return this.chargesMax - Math.max(0, (this.recharge - t) / this.duration);
+    };
+    this.ready = function() {
+        return this.currentCharges() >= 1;
+    };
+    this.start = function() {
+        if (this.recharge < t) {
+            this.wastedTracker += (t - this.recharge) / this.duration;
+            this.recharge = t;
+        }
+        this.recharge += this.duration;
+    };
+    this.adjust = function(time) {
+        this.recharge -= time;
+        this.normalTracker += time / this.duration;
+        if (this.recharge < t) {
+            this.wastedTracker += (t - this.recharge) / this.duration;
+            this.recharge = t;
+        }
+    };
+    this.rechargeMultiplier = null;
+    this.update = function() {
+        if (!this.rechargeMultiplier) {
+            return;
+        }
+
+        var oldMult = this.duration / this.baseDuration;
+        var newMult = this.rechargeMultiplier();
+        if (oldMult == newMult) {
+            return;
+        }
+
+        this.normalTracker += (t - this.lastUpdated) / this.duration;
+        this.lastUpdated = t;
+        if (this.recharge < t) {
+            this.wastedTracker += (t - this.recharge) / this.duration;
+            this.recharge = t;
+        }
+
+        var rem = this.recharge - t;
+        rem *= newMult / oldMult;
+        this.recharge = t + rem;
+        this.duration = newMult * this.baseDuration;
+    };
+    this.readyIn = function(time, charge) {
+        if (charge > this.chargesMax) {
+            return false;
+        }
+
+        return this.recharge - (this.chargesMax - charge) * this.duration <= t + time;
+    };
+
+    this.normalProgress = function() {
+        return this.normalTracker + (t - this.lastUpdated) / this.duration;
+    };
+    this.wastedProgress = function() {
+        return this.wastedTracker + Math.max((t - this.recharge) / this.duration, 0);
+    };
+    cooldowns.push(this);
+}
+
+var idMax = 0;
+
+function spell(name, icon, bind, castTime, coef, cd, onExecute) {
+    this.name = name;
+    this.description = function() {
+        return "";
+    };
+    this.baseCastTime = castTime;
+    this.castTime = function() {
+        return hasteMult * this.baseCastTime;
+    };
+    this.gcd = function() {
+        return Math.max(750, hasteMult * 1500);
+    };
+    this.bind = bind;
+    this.baseCoef = coef;
+    this.coef = function() {
+        return this.baseCoef;
+    };
+    this.id = idMax++;
+    this.cooldown = cd;
+    this.enabled = true;
+    this.executed = 0;
+    this.children = [];
+    this.disabledProcs = false;
+    this.generatesIcicles = false;
+    this.launchesIcicles = false;
+    this.targets = function() {
+        return 1;
+    };
+    this.focus = false;
+    this.triggerFocus = function() {
+        if (this.focus) {
+            focus.trigger();
+            if (focus.stack == focus.stacksMax) {
+                focus.expire(true);
+                if (focusBuff) {
+                    ffocus.trigger();
+                }
+                if (focusFof) {
+                    fof.trigger();
+                }
+            }
+        } else if (bind !== null) {
+            focus.expire(true);
+        }
+    };
+    this.execute = function() {
+        if (this.cooldown) {
+            this.cooldown.start();
+        }
+
+        if (this.onExecute) {
+            this.onExecute();
+        }
+
+        if (this.generatesIcicles) {
+            icicle.gain();
+        }
+
+        if (this.launchesIcicles && !glacialSpike.enabled) {
+            icicle.launch();
+        }
+
+        if (focusBuff || focusFof) {
+            this.triggerFocus();
+        }
+
+        this.executed++;
+    };
+    this.ready = function() {
+        if (this.cooldown && !this.cooldown.ready()) {
+            return false;
+        }
+
+        if (this.onReady && !this.onReady()) {
+            return false;
+        }
+
+        return true;
+    };
+    this.onExecute = onExecute;
+    this.onReady = null;
+    this.img = new Image();
+    this.img.src = icon;
+    this.frozen = function(target) {
+        return (aoeWc || target == 0) && wc.stack > 0;
+    };
+    this.frozenMultiplier = function(target) {
+        return 1.0 + stats.mastery;
+    };
+    this.critChance = function(target) {
+        var c = stats.crit;
+        if (this.frozen(target)) {
+            c *= 1.5;
+            c += 0.5;
+        }
+        return c;
+    };
+    this.genericMultiplier = function(target) {
+        return 1.0;
+    };
+    this.critMultiplier = function() {
+        var m = 2.0;
+        if (is.stack > 0) {
+            m *= 1.2;
+        }
+        return m;
+    };
+    this.snapshotMultiplier = function() {
+        return 1.0;
+    };
+    this.calculate = function(target, multiplier, tt) {
+        var d = this.coef() * stats.intellect;
+        var f = !tt && this.frozen(target);
+        if (f) {
+            d *= this.frozenMultiplier(target);
+        }
+        d *= this.genericMultiplier(target);
+        d *= multiplier;
+        d *= 1.0 + stats.vers;
+        var c = !tt && Math.random() < this.critChance(target);
+        if (c) {
+            d *= this.critMultiplier();
+        }
+        return {dmg : d, crit : c, frozen : f};
+    };
+    this.onImpact = null;
+    this.impact = function(snapshotTargets, snapshotMultiplier) {
+        if (!snapshotTargets) {
+            snapshotTargets = this.targets();
+        }
+        if (!snapshotMultiplier) {
+            snapshotMultiplier = this.snapshotMultiplier();
+        }
+        var tgtCount = Math.min(targetCount, snapshotTargets);
+        var impactDmg = 0.0;
+        for (var target = 0; target < tgtCount; target++) {
+            var r = this.calculate(target, snapshotMultiplier, false);
+            impactDmg += r.dmg;
+            totalDmg += r.dmg;
+            if (r.frozen) {
+                frozenDmg += r.dmg;
+            }
+
+            if (tgtCount < 3) {
+                combatLog.push({time : t, merged : false, spell : this, dmg : r.dmg, result : r});
+            }
+
+            if (this.onImpact) {
+                this.onImpact(target, r);
+            }
+        }
+
+        if (!this.disabledProcs && lonelyWinter.enabled) {
+            lonelyWinter.trigger();
+        }
+
+        var b = breakdown[this.name];
+        if (b) {
+            b.dmg += impactDmg;
+        } else {
+            breakdown[this.name] = {spell : this, dmg : impactDmg};
+        }
+
+        if (tgtCount >= 3) {
+            combatLog.push({time : t, merged : true, spell : this, dmg : impactDmg, targets : tgtCount});
+        }
+
+        return tgtCount;
+    };
+}
+
+
+var flurryCd = new cooldown(2, 20000);
+flurryCd.rechargeMultiplier = function() {
+    var m = hasteMult;
+    if (iv.stack > 0) {
+        m /= 1.0 + this.ivRecharge;
+    }
+    return m;
+}
+linkSlider(function(x) { flurryCd.ivRecharge = x; }, "ivRecharge", 0.01, pctString);
+linkSlider(function(x) { flurryCd.baseDuration = x; }, "flurryCd", 1000, secString);
+linkSlider(function(x) { flurryCd.chargesMax = x; }, "flurryCharges", 1, function(x) { return x; });
+
+var flurry = new spell("Flurry", "https://wow.zamimg.com/images/wow/icons/large/ability_warlock_burningembersblue.jpg", {key : "1", code : "Digit1"}, 0, 0.24, flurryCd,
+    function() {
+        if (this.munchProtection) {
+            bf.trigger(Math.max(0.5, hasteMult) * bf.baseDuration);
+        }
+        var hasteSnapshot = hasteMult;
+        for (var i = 0; i < 3; i++) {
+            addEvent(t + 1000 * distance / 50 + Math.max(0.5, hasteMult) * 500 * i, function() {
+                flurry.impact();
+                wc.trigger(Math.max(0.5, hasteSnapshot) * wc.baseDuration);
+                sc.expire(true);
+            });
+        }
+    });
+flurry.launchesIcicles = true;
+flurry.description = function() {
+    var desc = "Unleash a flurry of ice, striking the target 3 times for a total of "
+    desc += round(3 * this.calculate(0, this.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage. Each hit reduces the target's movement speed by 70% for 3 sec.";
+    desc += "\n\n";
+    desc += "Applies Winter's Chill, causing your target to take damage from your spells as if it were frozen."
+    return desc;
+};
+linkCheckbox(function(x) { flurry.munchProtection = x; }, "munchProtection");
+
+var frostbolt = new spell("Frostbolt", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostbolt02.jpg", {key : "2", code : "Digit2"}, 2000, 0.42, null,
+    function() {
+        if (Math.random() < this.bfProcChance[Math.min(this.bfProcChance.length - 1, this.counter)]) {
+            this.counter = 0;
+            var bf = function() {
+                flurryCd.adjust(frostbolt.bfRecharge * flurryCd.duration);
+                lastBf = t;
+            };
+            if (this.bfDelay && flurryCd.ready()) {
+                addEvent(t + 150, bf);
+            } else {
+                bf();
+            }
+        } else {
+            this.counter++;
+        }
+        if (Math.random() < this.fofProcChance) {
+            fof.trigger();
+        }
+        if (this.shatterlance) {
+            sl.trigger();
+        }
+        addEvent(t + 200 + 1000 * distance / 50, function() { frostbolt.impact(); });
+    });
+frostbolt.counter = 0;
+frostbolt.generatesIcicles = true;
+frostbolt.frozenMultiplier = function(target) {
+    return 1.2 * (1.0 + stats.mastery);
+};
+frostbolt.focus = true;
+frostbolt.fofProcChance = 0.2;
+frostbolt.description = function() {
+    var desc = "Launches a bolt of frost at the enemy, causing "
+    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage and slowing movement speed by 50% for 8 sec.";
+    desc += "\n\n";
+    desc += "Frostbolt damage is increased by 20% against frozen targets."
+    return desc;
+};
+linkSlider(function(x) { frostbolt.bfRecharge = x; }, "bfRecharge", 0.01, pctString);
+linkSlider(function(x) { frostbolt.bfProcChance = [x]; }, "bfChance", 0.01, pctString);
+linkCheckbox(function(x) { frostbolt.bfDelay = x; }, "bfDelay");
+linkCheckbox(function(x) { frostbolt.shatterlance = x; }, "shatterlance");
+
+var iceLance = new spell("Ice Lance", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostblast.jpg", {key : "3", code : "Digit3"}, 0, 0.24, null,
+    function() {
+        var fofUp;
+        if (bf.stack > 0) {
+            fofUp = false;
+        } else {
+            fofUp = fof.stack > 0;
+        }
+        if (fofUp) {
+            fof.expire(false);
+            if (flashFreeze.enabled) {
+                ff.trigger();
+            }
+        }
+        bf.expire(true);
+        var tgts = this.targets();
+        var mult = this.snapshotMultiplier();
+        addEvent(t + 1000 * distance / 50, function() {
+            iceLance.fofFrozen = fofUp;
+            iceLance.impact(tgts, mult);
+            if (wc.stack > 0) {
+                frozenIlWc++;
+            } else if (fofUp) {
+                frozenIlFof++;
+            }
+            if (sc.stack > 0 && iceLance.frozen(0)) {
+                supercool.fof++;
+            }
+        });
+    });
+iceLance.fofFrozen = false;
+iceLance.frozen = function(target) {
+    return this.fofFrozen || ((aoeWc || target == 0) && wc.stack > 0);
+};
+iceLance.frozenMultiplier = function(target) {
+    return 3.0 * (1.0 + stats.mastery);
+};
+iceLance.targets = function() {
+    if (si.stack > 0) {
+        return siTargets;
+    } else {
+        return 1;
+    }
+};
+iceLance.genericMultiplier = function(target) {
+    var m = 1.0;
+    if (ffocus.stack > 0) {
+        m *= 1.2;
+    }
+    return m;
+};
+iceLance.snapshotMultiplier = function() {
+    var m = 1.0;
+    if (sl.stack > 0) {
+        m *= 1.35;
+    }
+    return m;
+};
+iceLance.description = function() {
+    var desc = "Quickly fling a shard of ice at the target, dealing "
+    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage.";
+    desc += "\n\n";
+    desc += "Ice Lance damage is tripled against frozen targets."
+    return desc;
+};
+
+var glacialSpike = new spell("Glacial Spike", "https://wow.zamimg.com/images/wow/icons/large/ability_mage_glacialspike.jpg", {key : "q", code : "KeyQ"}, 3000, 1.68, null,
+    function() {
+        icicles.expire(true);
+        var tgts = this.targets();
+        addEvent(t + 200 + 1000 * distance / 50, function() { glacialSpike.impact(tgts); });
+    });
+glacialSpike.onReady = function() {
+    return icicles.stack == icicles.stacksMax;
+};
+glacialSpike.targets = function() {
+    if (si.stack > 0) {
+        return siTargets;
+    } else {
+        return 1;
+    }
+};
+glacialSpike.coef = function() {
+    return this.baseCoef + icicles.stacksMax * icicle.coef();
+};
+glacialSpike.description = function() {
+    var desc = "Conjures a massive spike of ice, and merges your current Icicles into it. It impales your target, dealing "
+    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage, and freezes the target in place for 4 sec. Damage may interrupt the freeze effect.";
+    desc += "\n\n";
+    desc += "Requires ";
+    desc += icicles.stacksMax;
+    desc += " Icicles to cast.";
+    return desc;
+};
+linkCheckbox(function(x) { glacialSpike.enabled = x; }, "glacialSpike");
+
+var frozenOrbCd = new cooldown(1, 60000);
+var frozenOrb = new spell("Frozen Orb", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frozenorb.jpg", {key : "4", code : "Digit4"}, 0, 0.09, frozenOrbCd,
+    function() {
+        if (this.freezingRain) {
+            fr.trigger();
+        }
+        var ticks = 0;
+        var tick = function() {
+            frozenOrb.impact();
+            if (ticks == 0) {
+                fof.trigger();
+            }
+            if (Math.random() < frozenOrb.fofProcChance) {
+                fof.trigger();
+            }
+            ticks++;
+            if (ticks < frozenOrb.maxTicks) {
+                addEvent(t + 500, tick);
+            }
+        };
+        addEvent(t + Math.max(500, 1000 * distance / 20), tick);
+    });
+frozenOrb.frozen = function() {
+    return true;
+};
+frozenOrb.targets = function() {
+    return 255;
+};
+frozenOrb.fofProcChance = 0.1;
+frozenOrb.maxTicks = 20;
+frozenOrb.description = function() {
+    var desc = "Launches an orb of swirling ice up to 40 yards forward, dealing up to "
+    desc += round(this.maxTicks * this.calculate(0, this.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage to all enemies it passes through and reducing their movement speed by ";
+    desc += "30% for 3 sec. Grants 1 charge of Fingers of Frost when it first damages an enemy.";
+    desc += "\n\n";
+    desc += "Frozen Orb deals damage as if the targets were frozen."
+    return desc;
+};
+linkCheckbox(function(x) { frozenOrb.freezingRain = x; }, "freezingRain");
+
+var icicle = new spell("Icicle", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_iceshard.jpg", null, 0, 0.18, null,
+    function() {
+        var tgts = this.targets();
+        addEvent(t + 1000 * distance / 50, function() { icicle.impact(tgts); });
+    });
+icicle.targets = function() {
+    if (si.stack > 0) {
+        return siTargets;
+    } else {
+        return 1;
+    }
+};
+icicle.launching = false;
+icicle.launch = function() {
+    var chain = function() {
+        if (icicles.stack == 0) {
+            icicle.launching = false;
+            return;
+        }
+
+        icicle.execute();
+        icicles.expire(false);
+        addEvent(t + hasteMult * 300, chain);
+    };
+
+    if (!this.launching) {
+        this.launching = true;
+        addEvent(t + 200, chain);
+    }
+};
+icicle.gain = function() {
+    if (icicles.stack == icicles.stacksMax) {
+        this.execute();
+    }
+    icicles.trigger();
+};
+frostbolt.children.push(icicle);
+
+var icyVeins = new spell("Icy Veins", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_coldhearted.jpg", {key : "r", code : "KeyR"}, 0, 0, new cooldown(1, 180000),
+    function() {
+        iv.trigger();
+    });
+icyVeins.description = function() {
+    var desc = "Accelerates your spellcasting for ";
+    desc += timeString(iv.baseDuration);
+    desc += ", granting 30% haste";
+    if (flurry.cooldown.ivRecharge > 0) {
+        desc += ", increasing your Flurry recharge rate by ";
+        desc += round(flurry.cooldown.ivRecharge * 100);
+        desc += "%"
+    }
+    desc += " and preventing damage from delaying your spellcasts.";
+    return desc;
+};
+
+var supercoolCd = new cooldown(1, 30000);
+supercoolCd.rechargeMultiplier = function() {
+    return hasteMult;
+};
+var supercool = new spell("Supercool", "https://wow.zamimg.com/images/wow/icons/large/ability_mage_burstofcold.jpg", {key : "f", code : "KeyF"}, 1500, 0.6, supercoolCd,
+    function() {
+        sc.expire(true);
+        this.fof = 0;
+        sc.trigger(hasteMult * sc.baseDuration);
+    });
+supercool.genericMultiplier = function(target) {
+    return 1.0 + 0.5 * this.fof;
+};
+supercool.fof = 0;
+supercool.description = function() {
+    var desc = "Supercools the target, dealing ";
+    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg / this.genericMultiplier(0));
+    desc += " Frost damage after ";
+    desc += timeString(sc.baseDuration * hasteMult);
+    desc += " or when a Flurry strikes the target."
+    desc += "\n\n";
+    desc += "While active, Ice Lances";
+    if (flashFreeze.enabled) {
+        desc += " and Flash Freezes";
+    }
+    desc += " that benefit from Shatter will increase the damage of Supercool by 50%."
+    return desc;
+};
+
+var blizzardCd = new cooldown(1, 8000);
+blizzardCd.rechargeMultiplier = function() {
+    return hasteMult;
+};
+var blizzard = new spell("Blizzard", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_icestorm.jpg", {key : "e", code : "KeyE"}, 2000, 0.06, blizzardCd,
+    function() {
+        si.trigger();
+        var ticks = 0;
+        var tick = function() {
+            var tgtHit = blizzard.impact();
+            frozenOrbCd.adjust(tgtHit * blizzard.cdr);
+            ticks++;
+            if (ticks < blizzard.maxTicks) {
+                addEvent(t + hasteMult * 1000, tick);
+            }
+        };
+        tick();
+    });
+blizzard.targets = function() {
+    return 255;
+};
+blizzard.castTime = function() {
+    if (fr.stack > 0) {
+        return 0;
+    } else {
+        return hasteMult * this.baseCastTime;
+    }
+};
+blizzard.genericMultiplier = function(target) {
+    if (fr.stack > 0) {
+        return 1.5;
+    } else {
+        return 1.0;
+    }
+};
+blizzard.focus = true;
+blizzard.maxTicks = 9;
+blizzard.cdr = 500;
+blizzard.description = function() {
+    var desc = "Ice shards pelt the target area, dealing ";
+    desc += round(this.maxTicks * this.calculate(0, this.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage over ";
+    desc += timeString(1000 * (this.maxTicks - 1) * hasteMult);
+    desc += " and reducing movement speed by 50% for 5 sec.";
+    if (this.cdr > 0) {
+        desc += "\n\n";
+        desc += "Each time Blizzard deals damage, the cooldown of Frozen Orb is reduced by "
+        desc += timeString(this.cdr);
+        desc += "."
+    }
+    return desc;
+};
+
+var iceShardCd = new cooldown(1, 45000);
+iceShardCd.rechargeMultiplier = function() {
+    return hasteMult;
+};
+var iceShard = new spell("Ice Shard", "https://wow.zamimg.com/images/wow/icons/large/artifactability_frostmage_blackicicles.jpg", {key : "c", code : "KeyC"}, 0, 0.5, iceShardCd,
+    function() {
+        addEvent(t + 1000 * distance / 50, function() {
+            iceShard.impact();
+            if (iceShard.frozen(0)) {
+                is.trigger();
+                frozenIs++;
+            }
+        });
+    });
+iceShard.frozenMultiplier = function(target) {
+    return 2.0 * (1.0 + stats.mastery);
+};
+iceShard.description = function() {
+    var desc = "Fling a shard of black ice at the target, dealing ";
+    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage. Increases your critical strike damage by 20% for ";
+    desc += timeString(is.baseDuration);
+    desc += " if it strikes a frozen target.";
+    desc += "\n\n";
+    desc += "Ice Shard damage is doubled against frozen targets."
+    return desc;
+};
+
+var frostBombExplosion = new spell("Frost Bomb Explosion", "https://wow.zamimg.com/images/wow/icons/large/spell_mage_frostbomb.jpg", null, 0, 0, null,
+    function() {
+        this.impact();
+    });
+frostBombExplosion.state = {dmg : 0, crit : false, frozen : false};
+frostBombExplosion.calculate = function(target, multiplier, tt) {
+    return this.state;
+};
+frostBombExplosion.targets = function() {
+    return 255;
+};
+var frostBombCd = new cooldown(1, 30000);
+frostBombCd.rechargeMultiplier = function() {
+    return hasteMult;
+};
+var frostBomb = new spell("Frost Bomb", "https://wow.zamimg.com/images/wow/icons/large/spell_mage_frostbomb.jpg", {key : "x", code : "KeyX"}, 2000, 1.0, frostBombCd,
+    function() {
+        addEvent(t + 200 + 1000 * distance / 50, function() {
+            frostBomb.impact();
+        });
+    });
+frostBomb.onImpact = function(target, r) {
+    frostBombExplosion.state.dmg = 0.6 * r.dmg;
+    frostBombExplosion.state.frozen = r.frozen;
+    frostBombExplosion.execute();
+};
+frostBomb.children.push(frostBombExplosion);
+frostBomb.description = function() {
+    var desc = "Freezes the target in blue ice, dealing ";
+    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage. The ice then shatters, dealing 60% additional damage to all nearby enemies ";
+    desc += "and reducing their movement speed by 70% for 3 sec.";
+    return desc;
+};
+
+var flashFreeze = new spell("Flash Freeze", "https://wow.zamimg.com/images/wow/icons/large/ability_deathknight_frozencenter.jpg", {key : "v", code : "KeyV"}, 0, 0.25, null,
+    function() {
+        this.impact();
+        fof.expire(false);
+        ff.expire(true);
+        if (sc.stack > 0 && this.frozen(0)) {
+            supercool.fof++;
+        }
+    });
+flashFreeze.onReady = function() {
+    return fof.stack > 0;
+};
+flashFreeze.genericMultiplier = function(target) {
+    return 1.0 + ff.stack * 0.4;
+};
+flashFreeze.targets = function() {
+    return 255;
+};
+flashFreeze.frozen = function(target) {
+    return true;
+};
+flashFreeze.description = function() {
+    var desc = "Freezes the air around the target, dealing ";
+    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage to all nearby enemies.";
+    desc += "\n\n";
+    if (ff.stacksMax > 0) {
+        desc += "Ice Lances that benefit from Fingers of Frost will increase the damage of your ";
+        desc += "next Flash Freeze by 40%, stacking up to ";
+        desc += ff.stacksMax;
+        desc += " times.";
+        desc += "\n\n";
+    }
+    desc += "Requires Fingers of Frost to cast.";
+    return desc;
+};
+
+var coneOfCold = new spell("Cone of Cold", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_glacier.jpg", {key : "z", code : "KeyZ"}, 0, 0.3, new cooldown(1, 12000),
+    function() {
+        this.impact();
+        coc.expire(true);
+    });
+coneOfCold.targets = function() {
+    return 255;
+};
+coneOfCold.genericMultiplier = function(target) {
+    return 1.0 + 0.1 * coc.stack;
+};
+coneOfCold.description = function() {
+    var desc = "Targets in a cone in front of you take ";
+    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage and have movement slowed by 70% for 5 sec.";
+    return desc;
+};
+
+var waterbolt = new spell("Waterbolt", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostbolt.jpg", null, 2500, 0.135, null,
+    function() {
+        addEvent(t + 1000 * distance / 16, function() {
+            waterbolt.impact();
+        });
+    });
+waterbolt.frozen = function() {
+    return false;
+};
+waterbolt.critMultiplier = function() {
+    return 2.0;
+};
+waterbolt.disabledProcs = true;
+
+var lonelyWinter = new spell("Lonely Winter", "https://wow.zamimg.com/images/wow/icons/large/achievement_dungeon_frozenthrone.jpg", null, 0, 0.25, null,
+    function() {
+        this.impact();
+    });
+lonelyWinter.frozen = function(target) {
+    return false;
+};
+lonelyWinter.disabledProcs = true;
+lonelyWinter.rppm = 12.0;
+lonelyWinter.lastProc = 0.0;
+lonelyWinter.lastTrigger = 0.0;
+lonelyWinter.trigger = function() {
+    var triggerTime = Math.min(10.0, (t - this.lastTrigger) / 1000.0);
+    var procTime = Math.min(1000.0, (t - this.lastProc) / 1000.0);
+
+    var pps = this.rppm / 60.0;
+    pps /= hasteMult;
+
+    var chance = pps * triggerTime * Math.max(1.0, 1.0 + (procTime * pps - 1.5) * 3.0);
+    if (Math.random() < chance) {
+        this.execute();
+        this.lastProc = t;
+    }
+
+    this.lastTrigger = t;
+};
+
+var waterboltEvent = null;
+linkCheckbox(function(x) {
+    lonelyWinter.enabled = x;
+    if (x) {
+        removeEvent(waterboltEvent);
+        waterboltEvent = null;
+    } else {
+        if (!waterboltEvent) {
+            var tick = function() {
+                waterboltEvent = addEvent(t + Math.max(1000, waterbolt.castTime()), function() {
+                    waterbolt.execute();
+                    tick();
+                });
+            }
+            tick();
+        }
+    }
+}, "lonelyWinter");
+
+var abilities = [flurry, frostbolt, iceLance, frozenOrb, blizzard, coneOfCold, glacialSpike, supercool, iceShard, frostBomb, flashFreeze, icyVeins];
+var experimental = [supercool, iceShard, frostBomb, flashFreeze];
+var aoe = [blizzard, coneOfCold];
+
+linkCheckbox(function(x) { for (var a of experimental) { a.enabled = x; } }, "experimentalSpells");
+linkCheckbox(function(x) { for (var a of aoe) { a.enabled = x; } }, "aoeSpells");
+
+var bf = new buff("Flurry", 1, 2000, "https://wow.zamimg.com/images/wow/icons/large/ability_mage_brainfreeze.jpg");
+bf.quiet = true;
+var fof = new buff("Fingers of Frost", 3, 15000, "https://wow.zamimg.com/images/wow/icons/large/ability_mage_wintersgrasp.jpg");
+fof.description = function() {
+    var desc = "Your next Ice Lance"
+    if (flashFreeze.enabled) {
+        desc += " or Flash Freeze"
+    }
+    desc += " deals damage as if the target were frozen."
+    return desc;
+};
+var icicles = new buff("Icicles", 5, 60000, "https://wow.zamimg.com/images/wow/icons/large/spell_frost_iceshard.jpg");
+icicles.description = function() {
+    var desc = this.stack + " ";
+    desc += this.stack > 1 ? "Icicles" : "Icicle";
+    desc += " stored.";
+    return desc;
+};
+var iv = new buff("Icy Veins", 1, 30000, "https://wow.zamimg.com/images/wow/icons/large/spell_frost_coldhearted.jpg");
+iv.description = function() {
+    var desc = "Haste increased by 30%"
+    if (flurry.cooldown.ivRecharge > 0) {
+        desc += ", Flurry recharge rate increased by ";
+        desc += round(flurry.cooldown.ivRecharge * 100);
+        desc += "%"
+    }
+    desc += " and immune to pushback.";
+    return desc;
+};
+iv.affectsHaste = true;
+var si = new buff("Splitting Ice", 1, 15000, "https://wow.zamimg.com/images/wow/icons/large/spell_frost_ice-shards.jpg");
+si.description = function() {
+    return "Ice Lance, Icicles, Ebonbolt and Glacial Spike hit a second nearby target.";
+};
+var fr = new buff("Freezing Rain", 1, 12000, "https://wow.zamimg.com/images/wow/icons/large/spell_frost_icestorm.jpg");
+fr.description = function() {
+    return "Blizzard is instant cast and deals 50% increased damage.";
+};
+var is = new buff("Jagged Ice", 1, 10000, "https://wow.zamimg.com/images/wow/icons/large/artifactability_frostmage_blackicicles.jpg");
+is.description = function() {
+    return "Critical strike damage increased by 20%.";
+};
+var ff = new buff("Freezing Winds", 3, 60000, "https://wow.zamimg.com/images/wow/icons/large/ability_deathknight_frozencenter.jpg");
+ff.description = function() {
+    var desc = "Your next Flash Freeze deals ";
+    desc += 40 * this.stack;
+    desc += "% increased damage.";
+    return desc;
+};
+var focus = new buff("Frost Focus", 3, 1e12, "https://wow.zamimg.com/images/wow/icons/large/ability_mage_coldasice.jpg");
+focus.description = function() {
+    var desc = this.stack + " ";
+    desc += this.stack > 1 ? "Frostbolts" : "Frostbolt";
+    desc += " cast.";
+    return desc;
+};
+var ffocus = new buff("Frozen Core", 1, 20000, "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frozencore.jpg");
+ffocus.description = function() {
+    return "Ice Lance damage increased by 20%.";
+};
+var sl = new buff("Shatterlance", 1, 500, "https://wow.zamimg.com/images/wow/icons/large/trade_archaeology_draenei_tome.jpg");
+sl.quiet = true;
+var coc = new buff("Gathering Storm", 30, 1e12, "https://wow.zamimg.com/images/wow/icons/large/spell_frost_glacier.jpg");
+coc.description = function() {
+    var desc = "Your next Cone of Cold deals ";
+    desc += 10 * this.stack;
+    desc += "% increased damage.";
+    return desc;
+};
+var cocEvent = null;
+linkCheckbox(function(x) {
+    if (x) {
+        coc.trigger();
+        coc.stack = coc.stacksMax;
+        if (!cocEvent) {
+            var tick = function() {
+                cocEvent = addEvent(t + 1500, function() {
+                    coc.trigger();
+                    tick();
+                });
+            };
+            tick();
+        }
+    } else {
+        coc.expire(true);
+        removeEvent(cocEvent);
+        cocEvent = null;
+    }
+}, "cocBuff");
+var buffs = [bf, fof, icicles, iv, si, fr, is, ff, focus, ffocus, sl, coc];
+
+var wc = new buff("Winter's Chill", 1, 1000, "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostward.jpg");
+wc.description = function() {
+    return "Taking damage from the Mage's spells as if frozen.";
+};
+var sc = new buff("Supercool", 1, 15000, "https://wow.zamimg.com/images/wow/icons/large/ability_mage_burstofcold.jpg");
+sc.description = function() {
+    var desc = "Causes ";
+    desc += round(supercool.calculate(0, supercool.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage on expiration.";
+    return desc;
+};
+sc.onExpiration = function() {
+    supercool.impact();
+};
+var debuffs = [wc, sc];
+
+var manualExpiration = false;
+
+document.addEventListener("keydown", keyDown);
+document.addEventListener("mousedown", mouseDown);
+document.addEventListener("mousemove", mouseUpdate);
+document.addEventListener("mouseenter", mouseUpdate);
+
+function keyDown(e) {
+    if (e.repeat) {
+        return;
+    }
+
+    if (keyBindSpell) {
+        keyBindSpell.bind = {key : e.key, code : e.code};
+        keyBindSpell = null;
+        return;
+    }
+
+    for (var b of abilityBar) {
+        if (e.code == b.ability.bind.code) {
+            queuedSpell = b.ability;
+            return;
+        }
+    }
+}
+
+function mouseDown(e) {
+    for (var b of abilityBar) {
+        if (e.target.id == "display" && b.x1 <= e.offsetX && e.offsetX <= b.x2 && b.y1 <= e.offsetY && e.offsetY <= b.y2) {
+            if (e.shiftKey) {
+                keyBindSpell = b.ability;
+            } else {
+                queuedSpell = b.ability;
+            }
+            return;
+        }
+    }
+
+    if (manualExpiration) {
+        for (var b of buffBar) {
+            if (e.target.id == "display" && b.x1 <= e.offsetX && e.offsetX <= b.x2 && b.y1 <= e.offsetY && e.offsetY <= b.y2) {
+                expireBuff = b.buff;
+                return;
+            }
+        }
+    }
+}
+
+function mouseUpdate(e) {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    updateTooltip(false);
+}
+
+var ai;
+linkCheckbox(function(x) { ai = x; }, "ai");
+var aiRisk = 1.0;
+var aiFofPrio = true;
+
+var aiEvent = null;
+var readyEvent = null;
+var castEvent = null;
+
+function castChoose() {
+    var rem = Math.max(0, gcdEnd - t, castEnd - t)
+    var remIcicles = Math.max(0, icicles.stacksMax - icicles.stack - (castSpell == frostbolt ? 1 : 0));
+
+    var gsCombo = flurry.gcd() + iceLance.gcd();
+    var gsFoF = fof.stack * iceLance.gcd();
+    var gsFrostbolt = remIcicles * frostbolt.castTime();
+    var gsCast = glacialSpike.castTime();
+
+    var gsFlurry = Math.max(0, 2 - flurry.cooldown.currentCharges()) * flurry.cooldown.duration;
+    var gsGamble = aiRisk * Math.max(0, remIcicles - 1) * frostbolt.bfProcChance[0] * frostbolt.bfRecharge * flurry.cooldown.duration;
+
+    var flurryFbCondition = !glacialSpike.enabled || gsFlurry - gsGamble < rem + gsCombo + gsFoF + gsFrostbolt + gsCast;
+
+    var gsCondition = flurry.cooldown.readyIn(rem + glacialSpike.castTime(), 1)
+                   && (icicles.stack == icicles.stacksMax || icicles.stack == icicles.stacksMax - 1 && castSpell == frostbolt);
+
+    var spell = null;
+    if (!castSpell && lastSpell == flurry) {
+        spell = iceLance;
+    } else if (flurry.cooldown.readyIn(rem, 1) && castSpell == glacialSpike) {
+        spell = flurry;
+    } else if (icyVeins.cooldown.readyIn(rem, 1)) {
+        spell = icyVeins;
+    } else if (frozenOrb.cooldown.readyIn(rem, 1)) {
+        spell = frozenOrb;
+    } else if (blizzard.enabled && castSpell != blizzard && blizzard.cooldown.readyIn(rem, 1) && targetCount > 1) {
+        spell = blizzard;
+    } else if (aiFofPrio && !flurry.munchProtection && fof.stack > 0) {
+        spell = iceLance;
+    } else if (flurry.cooldown.readyIn(rem, 1) && castSpell == frostbolt && flurryFbCondition) {
+        spell = flurry;
+    } else if (fof.stack > 0) {
+        spell = iceLance;
+    } else if (glacialSpike.enabled && icicles.remains() > rem && castSpell != glacialSpike && gsCondition) {
+        spell = glacialSpike;
+    } else {
+        spell = frostbolt;
+    }
+    return spell;
+}
+
+function castBegin() {
+    readyEvent = null;
+    var spent = t - lastSpent;
+    lastSpent = t;
+    if (waiting) {
+        waitTime += spent;
+    } else if (lastSpell) {
+        timeSpent[lastSpell.name].time += spent;
+    }
+    if (!queuedSpell) {
+        waiting = true;
+        return;
+    }
+
+    if (queuedSpell.ready()) {
+        waiting = false;
+        castStart = t;
+        castEnd = t + queuedSpell.castTime();
+        gcdStart = t;
+        gcdEnd = t + queuedSpell.gcd();
+        castSpell = queuedSpell;
+        queuedSpell = null;
+
+        if (!timeSpent[castSpell.name]) {
+            timeSpent[castSpell.name] = {spell : castSpell, time : 0};
+        }
+
+        scheduleCast();
+        scheduleAi();
+    } else {
+        waiting = true;
+        scheduleReady(5);
+    }
+}
+
+function castFinish() {
+    castEvent = null;
+    castSpell.execute();
+    lastSpell = castSpell;
+    castSpell = null;
+    scheduleReady();
+}
+
+function scheduleAi() {
+    if (!ai || aiEvent || queuedSpell) {
+        return;
+    }
+
+    aiEvent = addEvent(Math.max(t, gcdEnd - 150, castEnd - 150), function() {
+        aiEvent = null;
+        if (ai && queuedSpell === null) {
+            queuedSpell = castChoose();
+            scheduleReady();
+        }
+    });
+}
+
+function scheduleReady(delay = 0) {
+    if (readyEvent || castEvent) {
+        return;
+    }
+
+    var time = Math.max(t, gcdEnd, castEnd) + delay;
+    if (time <= t) {
+        castBegin();
+    } else {
+        readyEvent = addEvent(Math.max(t, gcdEnd, castEnd) + delay, castBegin);
+    }
+}
+
+function scheduleCast() {
+    if (!castSpell || castEvent) {
+        return;
+    }
+
+    if (castEnd <= t) {
+        castFinish();
+    } else {
+        castEvent = addEvent(castEnd, castFinish);
+    }
+}
+
+function totalWaitTime() {
+    return waitTime + (waiting ? t - lastSpent : 0);
+}
+
+function totalSpentTime(s) {
+    var r = s.time;
+    if (!waiting && (s.spell == castSpell && castEvent || s.spell == lastSpell && readyEvent)) {
+        r += t - lastSpent;
+    }
+    return r;
+}
+
+function updateHaste() {
+    hasteMult = 1.0 / (1.0 + stats.haste);
+    if (iv.stack > 0) {
+        hasteMult /= 1.3;
+    }
+    for (var c of cooldowns) {
+        c.update();
+    }
+}
+
+function drawSpiral(p, alpha, neg, x, y, w, h) {
+    var eps = 1e-6;
+    if ((!neg && p > 1.0 - eps) || (neg && p < eps)) {
+        ctx.save();
+        ctx.fillStyle = "black";
+        ctx.globalAlpha = alpha;
+        ctx.fillRect(x, y, w, h);
+        ctx.restore();
+    } else if (p >= eps && p <= 1.0 - eps) {
+        ctx.save();
+        var mx = x + w / 2;
+        var my = y + h / 2;
+        ctx.fillStyle = "black";
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.clip();
+        ctx.beginPath();
+        ctx.moveTo(mx, my);
+        ctx.arc(mx, my, w + h, (1.5 - 2 * p) % 2 * Math.PI, 1.5 * Math.PI, neg);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+var colors =
+    [ "rgb(128,133,133)"
+    , "rgb(132,186,91)"
+    , "rgb(144,103,167)"
+    , "rgb(211,94,96)"
+    , "rgb(225,151,76)"
+    , "rgb(204,194,16)"
+    , "rgb(0,0,0)"
+    , "rgb(142,95,156)"
+    , "rgb(122,194,148)"
+    , "rgb(217,150,126)"
+    , "rgb(156,61,61)"
+    , "rgb(156,61,61)"
+    , "rgb(186,130,176)"
+    , "rgb(95,115,161)"
+    , "rgb(114,147,203)"
+    , "rgb(171,104,87)"
+    ]
+
+var graph = [];
+var distribution = [];
+var deleted = 0;
+var lastGraph = 0;
+var useGauss = true;
+var drawLines = true;
+
+var samples;
+var lastSamples = null;
+linkSlider(function(x) { samples = x; }, "samples", 1, function(x) { return x; });
+
+var slice;
+var sliceBase = 1.1;
+var lastSlice = null;
+linkSlider(function(x) { slice = 100 * Math.pow(sliceBase, x); }, "slice", 1, x => Math.round(100 * Math.pow(sliceBase, x)) + " ms" );
+
+var graphWidth = 1500 + 2;
+var graphHeight = 200;
+
+function gauss(x) {
+    var s = 2 * 0.25 * 0.25;
+    return Math.exp((-x * x) / s) / Math.sqrt(Math.PI * s);
+}
+
+function flat(x) {
+    return 0.5 * (1 - Math.tanh(50 * (Math.abs(x) - 0.9)));
+}
+
+var prefixes = ["", "k", "M", "G", "T", "P", "E", "Z", "Y"]
+function siPrefix(x) {
+    var i = 0;
+    while (x >= 1000 && i < prefixes.length - 1) {
+        x /= 1000;
+        i++;
+    }
+    return x + prefixes[i];
+}
+
+function drawDpsTimeline() {
+    if (slice != lastSlice || samples != lastSamples) {
+        graph = [];
+        lastGraph = 0;
+        deleted = 0;
+        distribution = [];
+        if (samples > 0) {
+            for (var i = 0; i < 1 + 2 * samples; i++) {
+                var d = (i - samples) / samples;
+                if (useGauss) {
+                    distribution.push(gauss(d));
+                } else {
+                    distribution.push(flat(d));
+                }
+            }
+            var s = 0;
+            for (var i = 0; i < distribution.length; i++) {
+                s += distribution[i];
+            }
+            for (var i = 0; i < distribution.length; i++) {
+                distribution[i] /= s;
+            }
+        } else {
+            distribution = [1];
+        }
+    }
+    lastSlice = slice;
+    lastSamples = samples;
+
+    var sliceCount = Math.floor(1 + t / slice);
+    var graphMaxLength = graphWidth + 2 * samples;
+    var graphNewLength = sliceCount + 2 * samples - deleted;
+
+    var toDelete = Math.max(0, graphNewLength - graphMaxLength);
+    deleted += toDelete;
+    graphNewLength -= toDelete;
+    while (toDelete > 0 && graph.length > 0) {
+        graph.shift();
+        toDelete--;
+    }
+
+    while (graph.length < graphNewLength) {
+        var el = [];
+        for (var i = 0; i < idMax + 1; i++) {
+            el.push(0);
+        }
+        graph.push(el);
+    }
+
+    for (var i = combatLog.length - 1; i >= 0; i--) {
+        var data = combatLog[i];
+        if (data.time < lastGraph) {
+            break;
+        }
+
+        var mid = Math.floor(data.time / slice) + samples - deleted;
+        if (mid + samples < 0) {
+            break;
+        }
+
+        for (var j = Math.max(0, mid - samples); j <= mid + samples; j++) {
+            var dmg = data.dmg * distribution[j - mid + samples] * 1000 / slice
+            graph[j][data.spell.id] += dmg;
+            graph[j][idMax] += dmg;
+        }
+    }
+
+    lastGraph = t;
+
+    var draw = [];
+    for (var i = 0; i < idMax; i++) {
+        draw.push(false);
+    }
+    var m = 0;
+    for (var j = 0; j <= idMax; j++) {
+        for (var i = 0; i < graphWidth; i++) {
+            var pos = graph.length - samples - i - 1;
+            if (pos < 0) {
+                break;
+            }
+            if (j == idMax) {
+                m = Math.max(m, graph[pos][j]);
+            } else if (graph[pos][j] > 0) {
+                draw[j] = true;
+                break;
+            }
+        }
+    }
+
+    if (m > 0) {
+        ctx.save();
+        var gap = (canvas.width - graphWidth) / 2;
+        ctx.beginPath();
+        ctx.rect(gap + 1, 100, graphWidth - 2, graphHeight);
+        ctx.clip();
+
+        var starts = [];
+        for (var i = 0; i < graphWidth; i++) {
+            starts.push(0);
+        }
+
+        var slide = Math.floor(t / slice) - t / slice;
+
+        for (var j = idMax - 1; j >= 0; j--) {
+            if (!draw[j]) {
+                continue;
+            }
+            ctx.fillStyle = colors[j];
+            ctx.beginPath();
+            ctx.moveTo(slide + graphWidth + gap, graphHeight + 100);
+            for (var i = 0; i < graphWidth; i++) {
+                var pos = graph.length - samples - i - 1;
+                if (pos < 0 || graph[pos][j] == 0) {
+                    ctx.lineTo(slide + graphWidth + gap - i, graphHeight + 100);
+                } else {
+                    ctx.lineTo(slide + graphWidth + gap - i, graphHeight * (1 - (graph[pos][idMax] - starts[i]) / m) + 100);
+                    starts[i] += graph[pos][j];
+                }
+            }
+            ctx.lineTo(slide + gap, graphHeight + 100);
+            ctx.closePath();
+            ctx.fill();
+        }
+        if (drawLines) {
+            var distance = graphHeight / m;
+            var dpsStep = 1;
+            while (distance < 25) {
+                distance *= 10;
+                dpsStep *= 10;
+            }
+            if (distance / 5 > 25) {
+                distance /= 5;
+                dpsStep /= 5;
+            }
+            if (distance / 2 > 25) {
+                distance /= 2;
+                dpsStep /= 2;
+            }
+
+            var offset = distance;
+            ctx.fillStyle = "white";
+            ctx.globalAlpha = 0.2;
+            while (offset < graphHeight) {
+                ctx.fillRect(gap, Math.round(graphHeight + 100 - offset), graphWidth, 1);
+                offset += distance;
+            }
+            ctx.restore();
+            ctx.save();
+            ctx.font = "15px Arial";
+            ctx.textBaseline = "middle";
+            ctx.textAlign = "right";
+            ctx.globalAlpha = 0.6;
+            var lineNumber = dpsStep;
+            offset = distance;
+            while (offset < graphHeight) {
+                ctx.fillText(siPrefix(lineNumber), gap - 5, Math.round(graphHeight + 100 - offset));
+                offset += distance;
+                lineNumber += dpsStep;
+            }
+        }
+        ctx.restore();
+    }
+}
+
+function drawCastBar() {
+    if (castEnd > t) {
+        var xpos = uiX;
+        var ypos = uiY;
+        var progress = 1 - (castEnd - t) / (castEnd - castStart);
+        ctx.save();
+        ctx.fillStyle = "#303030";
+        ctx.fillRect(xpos, ypos, uiW, 50);
+        ctx.fillStyle = "#505050";
+        ctx.fillRect(xpos, ypos, progress * uiW, 50);
+        ctx.fillStyle = "#AAAAAA";
+        ctx.fillRect(xpos + progress * (uiW - 3), ypos, 3, 50);
+        ctx.font = "30px Arial";
+        ctx.fillStyle = "white";
+        ctx.textBaseline = "middle";
+        ctx.strokeText(castSpell.name, xpos + 10, ypos + 25);
+        ctx.fillText(castSpell.name, xpos + 10, ypos + 25);
+        ctx.restore();
+    }
+    if (gcdEnd > t) {
+        var xpos = uiX;
+        var ypos = uiY + 50;
+        var progress = 1 - (gcdEnd - t) / (gcdEnd - gcdStart);
+        ctx.save();
+        ctx.fillStyle = "#303030";
+        ctx.fillRect(xpos, ypos + 1, uiW, 9);
+        ctx.fillStyle = "white";
+        ctx.fillRect(xpos + progress * (uiW - 3), ypos + 1, 3, 9);
+        ctx.restore();
+    }
+    var iconSpell = castSpell || lastSpell;
+    if (iconSpell) {
+        var xpos = uiX - 51;
+        var ypos = uiY;
+        var o = 1.0;
+        if (t > castEnd + 500) {
+            o = Math.max(0, 1 - (t - castEnd - 500) / 1000);
+        }
+        if (o > 0.0) {
+            ctx.save();
+            ctx.globalAlpha = o;
+            ctx.drawImage(iconSpell.img, xpos, ypos, 50, 50);
+            ctx.restore();
+        }
+    }
+}
+
+function drawCdProgress() {
+    var xpos = uiX;
+    var ypos = uiY + 70;
+    var w = (uiW - 10 * (flurryCd.chargesMax - 1)) / flurryCd.chargesMax;
+    ctx.save();
+    ctx.fillStyle = "#303030";
+    for (var i = 0; i < flurryCd.chargesMax; i++) {
+        ctx.fillRect(xpos + (w + 10) * i, ypos, w, 15);
+    }
+    var c = flurryCd.currentCharges();
+    ctx.fillStyle = "#3065BA";
+    for (var i = 0; i < flurryCd.chargesMax; i++) {
+        ctx.fillRect(xpos + (w + 10) * i, ypos, Math.max(0, Math.min(c - i, 1)) * w, 15);
+    }
+    ctx.restore();
+}
+
+function drawIcicles() {
+    var xpos = uiX;
+    var ypos = uiY + 95;
+    var w = (uiW - 10 * (icicles.stacksMax - 1)) / icicles.stacksMax;
+    ctx.save();
+    var i = 0;
+    ctx.fillStyle = "#3065BA";
+    for (; i < icicles.stack; i++) {
+        ctx.fillRect(xpos + i * (w + 10), ypos, w, 15);
+    }
+    ctx.fillStyle = "#303030";
+    for (; i < icicles.stacksMax; i++) {
+        ctx.fillRect(xpos + i * (w + 10), ypos, w, 15);
+    }
+    ctx.restore();
+}
+
+function drawBuffs() {
+    ctx.save();
+    ctx.font = "30px Arial";
+    var xpos = uiX;
+    var ypos = uiY + 120;
+
+    var cmp = function(a, b) { return a.triggerTime - b.triggerTime; };
+    buffs.sort(cmp);
+    debuffs.sort(cmp);
+    buffBar = [];
+
+    for (var b of buffs) {
+        if (b.quiet || b.stack == 0) {
+            continue;
+        }
+
+        ctx.drawImage(b.img, xpos, ypos, 45, 45);
+        drawSpiral(b.remains() / b.duration, 0.6, true, xpos, ypos, 45, 45);
+        if (b.stacksMax > 1) {
+            ctx.strokeText(b.stack, xpos + 5, ypos + 40);
+            ctx.fillText(b.stack, xpos + 5, ypos + 40);
+        }
+        buffBar.push({buff : b, x1 : xpos, x2 : xpos + 45, y1 : ypos, y2 : ypos + 45});
+
+        xpos += 50;
+    }
+
+    var xpos = uiX + uiW - 45;
+    var ypos = uiY + 120;
+
+    for (var b of debuffs) {
+        if (b.quiet || b.stack == 0) {
+            continue;
+        }
+
+        ctx.drawImage(b.img, xpos, ypos, 45, 45);
+        drawSpiral(b.remains() / b.duration, 0.6, true, xpos, ypos, 45, 45);
+        if (b.stacksMax > 1) {
+            ctx.strokeText(b.stack, xpos + 5, ypos + 40);
+            ctx.fillText(b.stack, xpos + 5, ypos + 40);
+        }
+        buffBar.push({buff : b, x1 : xpos, x2 : xpos + 45, y1 : ypos, y2 : ypos + 45});
+
+        xpos -= 50;
+    }
+
+    ctx.restore();
+}
+
+var offsetX = [];
+var offsetY = [];
+var lastJiggle = 0;
+
+function drawDamage() {
+    ctx.save();
+    ctx.textBaseline = "middle";
+
+    var maxCrits = 7;
+    var maxHits = 10;
+
+    if (lastJiggle == 0 || t > lastJiggle + 50) {
+        lastJiggle = t;
+        for (var i = 0; i < maxCrits; i++) {
+            offsetX[i] = Math.random() * 2 - 1;
+            offsetY[i] = Math.random() * 2 - 1;
+        }
+    }
+
+    function damageText(e) {
+        var text;
+        if (e.merged) {
+            text = Math.round(e.dmg);
+            text += " [" + e.targets + " hits]";
+        } else {
+            text = Math.round(e.result.dmg);
+            if (e.result.frozen) {
+                text += " ❄";
+            }
+        }
+        return text;
+    }
+
+    var hits = [];
+    var crits = [];
+
+    for (var i = combatLog.length - 1; i >= 0; i--) {
+        var e = combatLog[i];
+
+        var critTime = 2000;
+        if (crits.length < maxCrits && !e.merged && e.result.crit && t - e.time <= critTime) {
+            crits.push({event : e, progress : (t - e.time) / critTime});
+        }
+
+        var hitTime = 3000;
+        if (hits.length < maxHits && (e.merged || !e.result.crit) && t - e.time <= hitTime) {
+            hits.push({event : e, progress : (t - e.time) / hitTime});
+        }
+
+        if (t - e.time > Math.max(critTime, hitTime)) {
+            break;
+        }
+    }
+
+    var lastProgres = 0;
+    for (var h of hits) {
+        h.progress = Math.max(h.progress, lastProgres);
+        lastProgres = h.progress + 1 / maxHits;
+    }
+
+    var xpos = uiX + uiW * 0.5;
+    var ypos = uiY - 100;
+
+    var size = 30;
+    var fontsize = 20;
+    ctx.font = fontsize + "px Arial";
+
+    for (var i = hits.length - 1; i >= 0; i--) {
+        var h = hits[i];
+        if (h.progress > 1) {
+            continue;
+        }
+
+        var o = 1;
+        if (h.progress > 0.7) {
+            o += (0.7 - h.progress) / 0.3
+        }
+
+        var ydraw = ypos - h.progress * 350;
+        ctx.globalAlpha = o;
+        ctx.drawImage(h.event.spell.img, xpos, ydraw - size / 2, size, size);
+        ctx.fillText(damageText(h.event), xpos + size + 7, ydraw);
+    }
+
+    xpos = uiX + uiW * 0.3;
+    ypos = uiY - 150;
+
+    size = 35;
+    fontsize = 25;
+
+    for (var i = crits.length - 1; i >= 0; i--) {
+        var c = crits[i];
+        if (c.progress > 1) {
+            continue;
+        }
+
+        var o = 1;
+        if (c.progress > 0.7) {
+            o += (0.7 - c.progress) / 0.3
+        }
+
+        var mult = 1;
+        if (c.progress < 0.1) {
+            mult += 0.6 * (0.1 - c.progress) / 0.1;
+        }
+
+        var ydraw = ypos - i * (size + 5);
+        var msize = size * mult;
+        ctx.font = "bold " + (fontsize * mult).toFixed(1) + "px Arial";
+        ctx.globalAlpha = o;
+        ctx.drawImage(c.event.spell.img, xpos + offsetX[i], ydraw - msize / 2 + offsetY[i], msize, msize);
+        ctx.fillText(damageText(c.event), xpos + msize + 7 + offsetX[i], ydraw + offsetY[i]);
+    }
+
+    ctx.restore();
+}
+
+var cooldownNumbers = true;
+
+function drawAbilityBar() {
+    var filtered = 0;
+    for (var a of abilities) {
+        if (a.enabled) {
+            filtered++;
+        }
+    }
+    var xpos = uiX + uiW / 2 - (filtered * 56 - 6) / 2;
+    var ypos = uiY + 230;
+    ctx.save();
+    ctx.lineWidth = 3;
+    ctx.textBaseline = "top";
+    ctx.textAlign = "right";
+    ctx.font = "16px Arial";
+    abilityBar = [];
+    for (var a of abilities) {
+        if (!a.enabled) {
+            continue;
+        }
+        var gcdRem = Math.max(0, gcdEnd - t);
+        var cdRem = 0.0;
+        if (a.cooldown) {
+            cdRem = Math.max(0, (a.cooldown.recharge - t) - (a.cooldown.chargesMax - 1) * a.cooldown.duration);
+        }
+
+        var p;
+        if (gcdRem == 0.0 && cdRem == 0.0) {
+            p = 0.0;
+        } else if (gcdRem >= cdRem) {
+            p = (gcdEnd - t) / (gcdEnd - gcdStart);
+        } else {
+            p = Math.min(1, 1 - a.cooldown.currentCharges());
+        }
+
+        if (a == queuedSpell || a == keyBindSpell) {
+            ctx.save();
+            ctx.fillStyle = a == keyBindSpell ? "red" : "yellow";
+            ctx.fillRect(xpos - 1, ypos - 1, 52, 52);
+            ctx.restore();
+        }
+
+        ctx.drawImage(a.img, xpos, ypos, 50, 50);
+        if (a.onReady && !a.onReady()) {
+            drawSpiral(1.0, 0.6, false, xpos, ypos, 50, 50);
+        }
+        drawSpiral(p, 0.6, false, xpos, ypos, 50, 50);
+        ctx.strokeText(a.bind.key.toUpperCase(), xpos + 49, ypos + 1);
+        ctx.fillText(a.bind.key.toUpperCase(), xpos + 49, ypos + 1);
+        if (cooldownNumbers && cdRem > 0 && cdRem >= gcdRem) {
+            cdRem /= 1000;
+            ctx.save();
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.font = "20px Arial";
+            var text;
+            if (cdRem > 3600) {
+                text = Math.ceil(cdRem / 3600) + "h";
+            } else if (cdRem > 60) {
+                text = Math.ceil(cdRem / 60) + "m";
+            } else {
+                text = Math.ceil(cdRem);
+            }
+            ctx.strokeText(text, xpos + 25, ypos + 25);
+            ctx.fillText(text, xpos + 25, ypos + 25);
+            ctx.restore();
+        }
+        abilityBar.push({ability : a, x1 : xpos, x2 : xpos + 50, y1 : ypos, y2 : ypos + 50});
+        xpos += 56;
+    }
+    ctx.restore();
+}
+
+var fofProc = new Image();
+fofProc.src = "https://cdn.discordapp.com/attachments/261426836427374593/590000510677942416/frozen_fingers.png";
+var bfProc = new Image();
+bfProc.src = "https://cdn.discordapp.com/attachments/261426836427374593/590003971633184786/rime.png";
+
+function drawProcs() {
+    ctx.save();
+    var xpos = uiX - 170;
+    var ypos = uiY - 120;
+    var fofStack = fof.stack;
+    for (var i = fofFade.length; i < fof.stacksMax; i++) {
+        fofFade.push(0.0);
+    }
+    for (var i = 0; i < fofFade.length; i++) {
+        if (i < fofStack) {
+            fofFade[i] = Math.min(1, fofFade[i] + delta / 200);
+        } else {
+            fofFade[i] = Math.max(0, fofFade[i] - delta / 200);
+        }
+        if (fofFade[i] <= 0.0) {
+            continue;
+        }
+        ctx.globalAlpha = fofFade[i];
+        ctx.drawImage(fofProc, xpos - 60 * i, ypos);
+    }
+
+    var xpos = uiX + uiW;
+    var ypos = uiY - 120;
+    if (lastBf !== null && t - lastBf < 1000) {
+        bfFade = Math.min(1, bfFade + delta / 200);
+    } else {
+        bfFade = Math.max(0, bfFade - delta / 200);
+    }
+    if (bfFade > 0.0) {
+        ctx.globalAlpha = bfFade;
+        ctx.drawImage(bfProc, xpos, ypos);
+    }
+    ctx.restore();
+}
+
+var zzz = new Image();
+zzz.src = "https://wow.zamimg.com/images/wow/icons/large/spell_nature_sleep.jpg";
+
+function drawStats() {
+    if (t <= 0) {
+        return;
+    }
+
+    if (totalDmg > 0) {
+        var xpos = uiX + uiW + 150;
+        var ypos = uiY - 80;
+        ctx.fillText("Time:", xpos, ypos)
+        ctx.fillText("DPS:", xpos, ypos + 20);
+        ctx.fillText("Frozen:", xpos, ypos + 40);
+        ctx.fillText(Math.round(t / 1000) + " s", xpos + 100, ypos)
+        ctx.fillText(Math.round(1000 * totalDmg / t), xpos + 100, ypos + 20);
+        ctx.fillText(Math.round(100 * frozenDmg / totalDmg) + "%", xpos + 100, ypos + 40);
+    }
+
+    var b = [];
+    for (var k in breakdown) {
+        b.push(breakdown[k]);
+    }
+    if (b.length > 0) {
+        b.sort(function(a,b) { return b.dmg - a.dmg; });
+        var xpos = uiX + uiW + 150 + 135;
+        var ypos = uiY + 100;
+        ctx.save();
+        ctx.font = "15px Arial";
+        ctx.fillText("DPS breakdown", xpos, ypos - 5);
+        ctx.restore();
+        var maxDmg = b[0].dmg;
+        for (var sp of b) {
+            ctx.drawImage(sp.spell.img, xpos, ypos, 20, 20);
+            ctx.save();
+            ctx.fillStyle = "#3065BA";
+            ctx.fillRect(xpos + 20, ypos, (sp.dmg / maxDmg) * 100, 20);
+            ctx.restore();
+            ctx.strokeText(Math.round(100 * sp.dmg / totalDmg) + "%", xpos + 22, ypos + 17);
+            ctx.fillText(Math.round(100 * sp.dmg / totalDmg) + "%", xpos + 22, ypos + 17);
+            ypos += 21;
+        }
+    }
+
+    b = [];
+    for (var k in timeSpent) {
+        b.push(timeSpent[k]);
+    }
+    var w = totalWaitTime();
+    if (w > 0.0) {
+        b.push({spell : {img : zzz}, time : w});
+    }
+    b.sort(function(a,b) { return totalSpentTime(b) - totalSpentTime(a); });
+    if (b.length > 0) {
+        var xpos = uiX + uiW + 150;
+        var ypos = uiY + 100;
+        ctx.save();
+        ctx.font = "15px Arial";
+        ctx.fillText("Time breakdown", xpos, ypos - 5);
+        ctx.restore();
+        var maxTime = totalSpentTime(b[0]);
+        for (var sp of b) {
+            var spt = totalSpentTime(sp);
+            ctx.drawImage(sp.spell.img, xpos, ypos, 20, 20);
+            ctx.save();
+            ctx.fillStyle = "#3065BA";
+            ctx.fillRect(xpos + 20, ypos, (spt / maxTime) * 100, 20);
+            ctx.restore();
+            ctx.strokeText(Math.round(100 * spt / t) + "%", xpos + 22, ypos + 17);
+            ctx.fillText(Math.round(100 * spt / t) + "%", xpos + 22, ypos + 17);
+            ypos += 21;
+        }
+    }
+
+    var xpos = uiX + uiW + 150;
+    var ypos = uiY;
+    ctx.save();
+    ctx.font = "15px Arial";
+    ctx.fillText("Proc waste breakdown", xpos, ypos - 5);
+    ctx.restore();
+    ctx.drawImage(flurry.img, xpos, ypos, 20, 20);
+    ctx.fillText(flurryCd.wastedProgress().toFixed(1) + " (" + Math.round(100 * flurryCd.wastedProgress() / (flurryCd.normalProgress() || 1)) + "%)", xpos + 25, ypos + 17);
+    var wastedFof = fof.triggerCount - frozenIlFof - flashFreeze.executed - fof.stack;
+    ctx.drawImage(fof.img, xpos, ypos + 21, 20, 20);
+    ctx.fillText(wastedFof + " (" + Math.round(100 * wastedFof / (fof.triggerCount || 1)) + "%)", xpos + 25, ypos + 38);
+    var wastedWc = flurry.executed - frozenIlWc - frozenIs;
+    ctx.drawImage(wc.img, xpos, ypos + 42, 20, 20);
+    ctx.fillText(wastedWc + " (" + Math.round(100 * wastedWc / (flurry.executed || 1)) + "%)", xpos + 25, ypos + 59);
+
+    var b = [];
+    for (var k in timeSpent) {
+        var tk = timeSpent[k];
+        var tkt = totalSpentTime(tk);
+        if (tkt <= 0) {
+            continue;
+        }
+
+        var bk = breakdown[k];
+        if (bk) {
+            var total = bk.dmg;
+            for (var child of bk.spell.children) {
+                var bc = breakdown[child.name];
+                if (bc) {
+                    total += bc.dmg;
+                }
+            }
+            b.push({spell : bk.spell, dpet : 1000 * total / tkt});
+        }
+    }
+    b.sort(function(a,b) { return b.dpet - a.dpet; });
+    if (b.length > 0) {
+        var xpos = uiX + uiW + 150 + 135 * 2;
+        var ypos = uiY + 100;
+        ctx.save();
+        ctx.font = "15px Arial";
+        ctx.fillText("DPET breakdown", xpos, ypos - 5);
+        ctx.restore();
+        var maxDpet = b[0].dpet;
+        for (var sp of b) {
+            ctx.drawImage(sp.spell.img, xpos, ypos, 20, 20);
+            ctx.save();
+            ctx.fillStyle = "#3065BA";
+            ctx.fillRect(xpos + 20, ypos, (sp.dpet / maxDpet) * 100, 20);
+            ctx.restore();
+            ctx.strokeText(Math.round(sp.dpet), xpos + 22, ypos + 17);
+            ctx.fillText(Math.round(sp.dpet), xpos + 22, ypos + 17);
+            ypos += 21;
+        }
+    }
+}
+
+function eventCmp(a, b) {
+    return a.time == b.time ? a.id - b.id : a.time - b.time;
+}
+
+function addEvent(t, onExecute) {
+    var e = {time : t, execute : onExecute, id : eventId++};
+    events.push(e);
+    events.sort(eventCmp);
+    return e;
+}
+
+function removeEvent(e) {
+    var ix = events.indexOf(e);
+    if (ix >= 0) {
+        events.splice(ix, 1);
+    }
+}
+
+function moveEvent(t, e) {
+    e.time = t;
+    events.sort(eventCmp);
+}
+
+var detailedStats;
+linkCheckbox(function(x) { detailedStats = x; }, "stats");
+
+var renderTime = 0.0;
+var lastRenderTime = 0.0;
+
+var lastTime = 0;
+var speedupBase = 1.3;
+var speed;
+linkSlider(function(x) { speed = Math.pow(speedupBase, x); }, "speedFactor", 1, x => Math.pow(speedupBase, x).toFixed(2) );
+
+var timeline;
+linkCheckbox(function(x) { timeline = x; }, "timeline");
+
+var lastUpdateTime = 0;
+var pause = 0;
+
+function draw(time) {
+    var realDelta = time - lastTime;
+    lastTime = time;
+    renderTime = lastRenderTime + pause * Math.min(100, realDelta) * speed;
+
+    if (inputChanged) {
+        updateHaste();
+        inputChanged = false;
+    }
+    if (expireBuff) {
+        expireBuff.expire(true);
+        expireBuff = null;
+    }
+    if (queuedSpell || ai) {
+        scheduleAi();
+        scheduleReady();
+        pause = 1.0;
+    }
+    while (events.length > 0 && events[0].time < renderTime) {
+        var e = events.shift();
+        t = e.time;
+        e.execute(e.time);
+    }
+
+    t = renderTime;
+    delta = renderTime - lastRenderTime;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawProcs();
+    drawCastBar();
+    drawCdProgress();
+    drawIcicles();
+    drawBuffs();
+    if (timeline) {
+        drawDpsTimeline();
+    } else {
+        drawDamage();
+    }
+    drawAbilityBar();
+    if (detailedStats) {
+        drawStats();
+    }
+    if (time > lastUpdateTime + 100) {
+        lastUpdateTime = time;
+        updateTooltip(true);
+    }
+    lastRenderTime = renderTime;
+    requestAnimationFrame(draw);
+}
+
+requestAnimationFrame(draw);
+
+function demonstrationBfa() {
+    flurryCd.baseDuration = 1e12;
+    flurryCd.chargesMax = 1;
+    flurryCd.update();
+    flurryCd.start();
+    frostbolt.fofProcChance = 0.15;
+    frostbolt.bfProcChance = [0.25];
+    frostbolt.bfRecharge = 1.0;
+    frostbolt.bfDelay = true;
+    flurry.munchProtection = false;
+    flurry.generatesIcicles = true;
+    flurry.launchesIcicles = false;
+    iceLance.launchesIcicles = true;
+    fof.stacksMax = 2;
+    iv.baseDuration = 20000;
+    ai = true;
+    aiRisk = 100;
+    aiFofPrio = false;
+}
+</script>
+</body>
+</html>
