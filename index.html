@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Fast Fun</title>
+    <title>Frost Mage</title>
     <style>
         body { background: #0e0e0e; font-family: Arial; color: #DDDDDD; }
         canvas { display: block; margin: 0 auto; }
@@ -111,7 +111,6 @@ ctx.lineWidth = 2;
 
 var t = 0.0;
 var delta = 0.0;
-var eventId = 0;
 
 var uiX = 550;
 var uiY = 500;
@@ -299,6 +298,7 @@ var distance = 30;
 
 var events = [];
 var combatLog = [];
+var combatLogEnabled = true;
 
 var stats = {};
 stats.intellect = 22399 * 1.02 * 1.05;
@@ -377,9 +377,6 @@ function buff(name, stacks, duration, icon) {
 
         this.duration = duration || this.baseDuration;
         this.triggerCount++;
-        if (this.stack > oldStack && this.affectsHaste) {
-            updateHaste();
-        }
         if (this.expireEvent) {
             moveEvent(t + this.duration, this.expireEvent);
         } else {
@@ -394,6 +391,9 @@ function buff(name, stacks, duration, icon) {
                     b.onExpiration();
                 }
             });
+        }
+        if (this.stack > oldStack && this.affectsHaste) {
+            updateHaste();
         }
     };
 
@@ -482,14 +482,13 @@ function cooldown(charges, duration) {
         this.recharge = t + rem;
         this.duration = newMult * this.baseDuration;
     };
-    this.readyIn = function(time, charge) {
+    this.readyIn = function(charge) {
         if (charge > this.chargesMax) {
-            return false;
+            return Number.POSITIVE_INFINITY;
         }
 
-        return this.recharge - (this.chargesMax - charge) * this.duration <= t + time;
+        return Math.max(0, this.recharge - (this.chargesMax - charge) * this.duration - t);
     };
-
     this.normalProgress = function() {
         return this.normalTracker + (t - this.lastUpdated) / this.duration;
     };
@@ -644,7 +643,7 @@ function spell(name, icon, bind, castTime, coef, cd, onExecute) {
                 frozenDmg += r.dmg;
             }
 
-            if (tgtCount < 3) {
+            if (combatLogEnabled && tgtCount < 3) {
                 combatLog.push({time : t, merged : false, spell : this, dmg : r.dmg, result : r});
             }
 
@@ -664,7 +663,7 @@ function spell(name, icon, bind, castTime, coef, cd, onExecute) {
             breakdown[this.name] = {spell : this, dmg : impactDmg};
         }
 
-        if (tgtCount >= 3) {
+        if (combatLogEnabled && tgtCount >= 3) {
             combatLog.push({time : t, merged : true, spell : this, dmg : impactDmg, targets : tgtCount});
         }
 
@@ -1399,32 +1398,30 @@ function castChoose() {
 
     var flurryFbCondition = !glacialSpike.enabled || gsFlurry - gsGamble < rem + gsCombo + gsFoF + gsFrostbolt + gsCast;
 
-    var gsCondition = flurry.cooldown.readyIn(rem + glacialSpike.castTime(), 1)
+    var gsCondition = flurry.cooldown.readyIn(1) <= rem + glacialSpike.castTime()
                    && (icicles.stack == icicles.stacksMax || icicles.stack == icicles.stacksMax - 1 && castSpell == frostbolt);
 
-    var spell = null;
     if (!castSpell && lastSpell == flurry) {
-        spell = iceLance;
-    } else if (flurry.cooldown.readyIn(rem, 1) && castSpell == glacialSpike) {
-        spell = flurry;
-    } else if (icyVeins.cooldown.readyIn(rem, 1)) {
-        spell = icyVeins;
-    } else if (frozenOrb.cooldown.readyIn(rem, 1)) {
-        spell = frozenOrb;
-    } else if (blizzard.enabled && castSpell != blizzard && blizzard.cooldown.readyIn(rem, 1) && targetCount > 1) {
-        spell = blizzard;
+        return iceLance;
+    } else if (flurry.cooldown.readyIn(1) <= rem && castSpell == glacialSpike) {
+        return flurry;
+    } else if (icyVeins.cooldown.readyIn(1) <= rem) {
+        return icyVeins;
+    } else if (frozenOrb.cooldown.readyIn(1) <= rem) {
+        return frozenOrb;
+    } else if (blizzard.enabled && castSpell != blizzard && blizzard.cooldown.readyIn(1) <= rem && targetCount > 1) {
+        return blizzard;
     } else if (aiFofPrio && !flurry.munchProtection && fof.stack > 0) {
-        spell = iceLance;
-    } else if (flurry.cooldown.readyIn(rem, 1) && castSpell == frostbolt && flurryFbCondition) {
-        spell = flurry;
+        return iceLance;
+    } else if (flurry.cooldown.readyIn(1) <= rem && castSpell == frostbolt && flurryFbCondition) {
+        return flurry;
     } else if (fof.stack > 0) {
-        spell = iceLance;
+        return iceLance;
     } else if (glacialSpike.enabled && icicles.remains() > rem && castSpell != glacialSpike && gsCondition) {
-        spell = glacialSpike;
+        return glacialSpike;
     } else {
-        spell = frostbolt;
+        return frostbolt;
     }
-    return spell;
 }
 
 function castBegin() {
@@ -1493,7 +1490,7 @@ function scheduleReady(delay = 0) {
     if (time <= t) {
         castBegin();
     } else {
-        readyEvent = addEvent(Math.max(t, gcdEnd, castEnd) + delay, castBegin);
+        readyEvent = addEvent(time, castBegin);
     }
 }
 
@@ -2190,8 +2187,8 @@ function drawStats() {
     if (w > 0.0) {
         b.push({spell : {img : zzz}, time : w});
     }
-    b.sort(function(a,b) { return totalSpentTime(b) - totalSpentTime(a); });
     if (b.length > 0) {
+        b.sort(function(a,b) { return totalSpentTime(b) - totalSpentTime(a); });
         var xpos = uiX + uiW + 150;
         var ypos = uiY + 100;
         ctx.save();
@@ -2229,9 +2226,8 @@ function drawStats() {
 
     var b = [];
     for (var k in timeSpent) {
-        var tk = timeSpent[k];
-        var tkt = totalSpentTime(tk);
-        if (tkt <= 0) {
+        var tk = totalSpentTime(timeSpent[k]);
+        if (tk <= 0) {
             continue;
         }
 
@@ -2244,11 +2240,11 @@ function drawStats() {
                     total += bc.dmg;
                 }
             }
-            b.push({spell : bk.spell, dpet : 1000 * total / tkt});
+            b.push({spell : bk.spell, dpet : 1000 * total / tk});
         }
     }
-    b.sort(function(a,b) { return b.dpet - a.dpet; });
     if (b.length > 0) {
+        b.sort(function(a,b) { return b.dpet - a.dpet; });
         var xpos = uiX + uiW + 150 + 135 * 2;
         var ypos = uiY + 100;
         ctx.save();
@@ -2269,14 +2265,18 @@ function drawStats() {
     }
 }
 
-function eventCmp(a, b) {
-    return a.time == b.time ? a.id - b.id : a.time - b.time;
-}
-
 function addEvent(t, onExecute) {
-    var e = {time : t, execute : onExecute, id : eventId++};
+    var e = {time : t, execute : onExecute};
     events.push(e);
-    events.sort(eventCmp);
+    for (var i = events.length - 2; i >= 0; i--) {
+        if (events[i].time > events[i + 1].time) {
+            var tmp = events[i + 1];
+            events[i + 1] = events[i];
+            events[i] = tmp;
+        } else {
+            break;
+        }
+    }
     return e;
 }
 
@@ -2288,8 +2288,34 @@ function removeEvent(e) {
 }
 
 function moveEvent(t, e) {
+    var prevt = e.time;
     e.time = t;
-    events.sort(eventCmp);
+    var ix = events.indexOf(e);
+    if (ix < 0) {
+        return;
+    }
+
+    if (prevt < t) {
+        for (var i = ix; i < events.length - 1; i++) {
+            if (events[i].time >= events[i + 1].time) {
+                var tmp = events[i + 1];
+                events[i + 1] = events[i];
+                events[i] = tmp;
+            } else {
+                break;
+            }
+        }
+    } else if (prevt > t) {
+        for (var i = ix - 1; i >= 0; i--) {
+            if (events[i].time > events[i + 1].time) {
+                var tmp = events[i + 1];
+                events[i + 1] = events[i];
+                events[i] = tmp;
+            } else {
+                break;
+            }
+        }
+    }
 }
 
 var detailedStats;
@@ -2361,7 +2387,7 @@ function draw(time) {
 requestAnimationFrame(draw);
 
 function demonstrationBfa() {
-    flurryCd.baseDuration = 1e12;
+    flurryCd.baseDuration = 1e9;
     flurryCd.chargesMax = 1;
     flurryCd.update();
     flurryCd.start();
