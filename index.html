@@ -1385,6 +1385,11 @@ var readyEvent = null;
 var castEvent = null;
 
 function castChoose() {
+    aiEvent = null;
+    if (!ai || queuedSpell) {
+        return;
+    }
+
     var rem = Math.max(0, gcdEnd - t, castEnd - t)
     var remIcicles = Math.max(0, icicles.stacksMax - icicles.stack - (castSpell == frostbolt ? 1 : 0));
 
@@ -1402,25 +1407,25 @@ function castChoose() {
                    && (icicles.stack == icicles.stacksMax || icicles.stack == icicles.stacksMax - 1 && castSpell == frostbolt);
 
     if (!castSpell && lastSpell == flurry) {
-        return iceLance;
+        queuedSpell = iceLance;
     } else if (flurry.cooldown.readyIn(1) <= rem && castSpell == glacialSpike) {
-        return flurry;
+        queuedSpell = flurry;
     } else if (icyVeins.cooldown.readyIn(1) <= rem) {
-        return icyVeins;
+        queuedSpell = icyVeins;
     } else if (frozenOrb.cooldown.readyIn(1) <= rem) {
-        return frozenOrb;
+        queuedSpell = frozenOrb;
     } else if (blizzard.enabled && castSpell != blizzard && blizzard.cooldown.readyIn(1) <= rem && targetCount > 1) {
-        return blizzard;
+        queuedSpell = blizzard;
     } else if (aiFofPrio && !flurry.munchProtection && fof.stack > 0) {
-        return iceLance;
+        queuedSpell = iceLance;
     } else if (flurry.cooldown.readyIn(1) <= rem && castSpell == frostbolt && flurryFbCondition) {
-        return flurry;
+        queuedSpell = flurry;
     } else if (fof.stack > 0) {
-        return iceLance;
+        queuedSpell = iceLance;
     } else if (glacialSpike.enabled && icicles.remains() > rem && castSpell != glacialSpike && gsCondition) {
-        return glacialSpike;
+        queuedSpell = glacialSpike;
     } else {
-        return frostbolt;
+        queuedSpell = frostbolt;
     }
 }
 
@@ -1472,13 +1477,12 @@ function scheduleAi() {
         return;
     }
 
-    aiEvent = addEvent(Math.max(t, gcdEnd - 150, castEnd - 150), function() {
-        aiEvent = null;
-        if (ai && queuedSpell === null) {
-            queuedSpell = castChoose();
-            scheduleReady();
-        }
-    });
+    var time = Math.max(t, gcdEnd - 150, castEnd - 150);
+    if (time <= t) {
+        castChoose();
+    } else {
+        aiEvent = addEvent(time, castChoose);
+    }
 }
 
 function scheduleReady(delay = 0) {
@@ -2335,11 +2339,7 @@ linkCheckbox(function(x) { timeline = x; }, "timeline");
 var lastUpdateTime = 0;
 var pause = 0;
 
-function draw(time) {
-    var realDelta = time - lastTime;
-    lastTime = time;
-    renderTime = lastRenderTime + pause * Math.min(100, realDelta) * speed;
-
+function handleUserInput() {
     if (inputChanged) {
         updateHaste();
         inputChanged = false;
@@ -2348,15 +2348,25 @@ function draw(time) {
         expireBuff.expire(true);
         expireBuff = null;
     }
-    if (queuedSpell || ai) {
+    if (!queuedSpell && ai) {
         scheduleAi();
+    }
+    if (queuedSpell) {
         scheduleReady();
         pause = 1.0;
     }
+}
+
+function draw(time) {
+    var realDelta = time - lastTime;
+    lastTime = time;
+    renderTime = lastRenderTime + pause * Math.min(100, realDelta) * speed;
+    handleUserInput();
+
     while (events.length > 0 && events[0].time < renderTime) {
         var e = events.shift();
         t = e.time;
-        e.execute(e.time);
+        e.execute();
     }
 
     t = renderTime;
