@@ -296,7 +296,9 @@ function updateTooltip(force) {
 
 var distance = 30;
 
-var events = [];
+var eventHead = null;
+var eventTail = null;
+var eventCache = null;
 var combatLog = [];
 var combatLogEnabled = true;
 
@@ -413,8 +415,9 @@ function buff(name, stacks, duration, icon) {
 
         if (this.expireEvent) {
             if (this.stack == 0) {
+                var handleExpiration = this.expireEvent.execute;
                 removeEvent(this.expireEvent);
-                this.expireEvent.execute();
+                handleExpiration();
             } else if (this.affectsHaste) {
                 updateHaste();
             }
@@ -689,10 +692,10 @@ linkSlider(function(x) { flurryCd.chargesMax = x; }, "flurryCharges", 1, functio
 
 var flurry = new spell("Flurry", "https://wow.zamimg.com/images/wow/icons/large/ability_warlock_burningembersblue.jpg", {key : "1", code : "Digit1"}, 0, 0.24, flurryCd,
     function() {
-        if (this.munchProtection) {
-            bf.trigger(Math.max(0.5, hasteMult) * bf.baseDuration);
-        }
         var mult = Math.max(0.5, hasteMult);
+        if (this.munchProtection) {
+            bf.trigger(mult * bf.baseDuration);
+        }
         var ticks = 0;
         var tick = function() {
             flurry.impact();
@@ -1295,7 +1298,7 @@ var cocEvent = null;
 linkCheckbox(function(x) {
     if (x) {
         coc.trigger();
-        coc.currentStack() = coc.stacksMax;
+        coc.stack = coc.stacksMax;
         if (!cocEvent) {
             var tick = function() {
                 cocEvent = addEvent(t + 1500, function() {
@@ -2277,57 +2280,109 @@ function drawStats() {
     }
 }
 
-function addEvent(t, onExecute) {
-    var e = {time : t, execute : onExecute};
-    events.push(e);
-    for (var i = events.length - 2; i >= 0; i--) {
-        if (events[i].time > events[i + 1].time) {
-            var tmp = events[i + 1];
-            events[i + 1] = events[i];
-            events[i] = tmp;
-        } else {
-            break;
-        }
+function recycleEvent(e) {
+    e.next = eventCache;
+    e.prev = null;
+    e.execute = null;
+    eventCache = e;
+}
+
+function unlink(e) {
+    var prev = e.prev;
+    var next = e.next;
+    if (prev) {
+        prev.next = next;
+    } else {
+        eventHead = next;
     }
+    if (next) {
+        next.prev = prev;
+    } else {
+        eventTail = prev;
+    }
+}
+
+function linkAfter(e, prev) {
+    var next = prev ? prev.next : eventHead;
+    e.prev = prev;
+    e.next = next;
+    if (prev) {
+        prev.next = e;
+    } else {
+        eventHead = e;
+    }
+    if (next) {
+        next.prev = e;
+    } else {
+        eventTail = e;
+    }
+}
+
+function linkBefore(e, next) {
+    var prev = next ? next.prev : eventTail;
+    e.prev = prev;
+    e.next = next;
+    if (prev) {
+        prev.next = e;
+    } else {
+        eventHead = e;
+    }
+    if (next) {
+        next.prev = e;
+    } else {
+        eventTail = e;
+    }
+}
+
+function addEvent(t, onExecute) {
+    var e;
+    if (eventCache) {
+        e = eventCache;
+        eventCache = e.next;
+        e.time = t;
+        e.execute = onExecute;
+    } else {
+        e = {time : t, execute : onExecute, prev : null, next : null};
+    }
+    var prev = eventTail;
+    while (prev && prev.time > t) {
+        prev = prev.prev;
+    }
+    linkAfter(e, prev);
     return e;
 }
 
 function removeEvent(e) {
-    var ix = events.indexOf(e);
-    if (ix >= 0) {
-        events.splice(ix, 1);
-    }
-}
-
-function moveEvent(t, e) {
-    var prevt = e.time;
-    e.time = t;
-    var ix = events.indexOf(e);
-    if (ix < 0) {
+    if (!e || !e.execute) {
         return;
     }
 
-    if (prevt < t) {
-        for (var i = ix; i < events.length - 1; i++) {
-            if (events[i].time >= events[i + 1].time) {
-                var tmp = events[i + 1];
-                events[i + 1] = events[i];
-                events[i] = tmp;
-            } else {
-                break;
-            }
-        }
-    } else if (prevt > t) {
-        for (var i = ix - 1; i >= 0; i--) {
-            if (events[i].time > events[i + 1].time) {
-                var tmp = events[i + 1];
-                events[i + 1] = events[i];
-                events[i] = tmp;
-            } else {
-                break;
-            }
-        }
+    unlink(e);
+    recycleEvent(e);
+}
+
+function moveEvent(t, e) {
+    if (!e || !e.execute) {
+        return;
     }
+
+    if (t < e.time) {
+        var prev = e.prev;
+        while (prev && prev.time > t) {
+            prev = prev.prev;
+        }
+        unlink(e);
+        linkAfter(e, prev);
+    } else if (t > e.time) {
+        var next = e.next;
+        while (next && next.time <= t) {
+            next = next.next;
+        }
+        unlink(e);
+        linkBefore(e, next);
+    }
+
+    e.time = t;
 }
 
 var detailedStats;
@@ -2371,10 +2426,12 @@ function draw(time) {
     renderTime = lastRenderTime + pause * Math.min(100, realDelta) * speed;
     handleUserInput();
 
-    while (events.length > 0 && events[0].time < renderTime) {
-        var e = events.shift();
+    while (eventHead && eventHead.time < renderTime) {
+        var e = eventHead;
+        unlink(e);
         t = e.time;
         e.execute();
+        recycleEvent(e);
     }
 
     t = renderTime;
