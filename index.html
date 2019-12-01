@@ -2060,16 +2060,16 @@ function drawAbilityBar() {
         var gcdRem = Math.max(0, gcdEnd - t);
         var cdRem = 0.0;
         if (a.cooldown) {
-            cdRem = Math.max(0, (a.cooldown.recharge - t) - (a.cooldown.chargesMax - 1) * a.cooldown.duration);
+            cdRem = a.cooldown.readyIn(1);
         }
 
         var p;
         if (gcdRem == 0.0 && cdRem == 0.0) {
             p = 0.0;
         } else if (gcdRem >= cdRem) {
-            p = (gcdEnd - t) / (gcdEnd - gcdStart);
+            p = gcdRem / (gcdEnd - gcdStart);
         } else {
-            p = Math.min(1, 1 - a.cooldown.currentCharges());
+            p = cdRem / a.cooldown.duration;
         }
 
         if (a == queuedSpell || a == keyBindSpell) {
@@ -2280,16 +2280,11 @@ function drawStats() {
     }
 }
 
-function recycleEvent(e) {
-    e.next = eventCache;
-    e.prev = null;
-    e.execute = null;
-    eventCache = e;
-}
-
 function unlink(e) {
     var prev = e.prev;
     var next = e.next;
+    e.prev = null;
+    e.next = null;
     if (prev) {
         prev.next = next;
     } else {
@@ -2335,19 +2330,11 @@ function linkBefore(e, next) {
 }
 
 function addEvent(t, onExecute) {
-    var e;
-    if (eventCache) {
-        e = eventCache;
-        eventCache = e.next;
-        e.time = t;
-        e.execute = onExecute;
-    } else {
-        e = {time : t, execute : onExecute, prev : null, next : null};
-    }
     var prev = eventTail;
     while (prev && prev.time > t) {
         prev = prev.prev;
     }
+    var e = {time : t, execute : onExecute, prev : null, next : null};
     linkAfter(e, prev);
     return e;
 }
@@ -2358,7 +2345,7 @@ function removeEvent(e) {
     }
 
     unlink(e);
-    recycleEvent(e);
+    e.execute = null;
 }
 
 function moveEvent(t, e) {
@@ -2431,7 +2418,7 @@ function draw(time) {
         unlink(e);
         t = e.time;
         e.execute();
-        recycleEvent(e);
+        e.execute = null;
     }
 
     t = renderTime;
