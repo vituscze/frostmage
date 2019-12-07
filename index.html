@@ -2030,6 +2030,30 @@ function drawAbilityBar() {
             drawSpiral(1.0, 0.6, false, xpos, ypos, 50, 50);
         }
         drawSpiral(p, 0.6, false, xpos, ypos, 50, 50);
+        if (a.cooldown && a.cooldown.chargesMax > 1) {
+            var c = a.cooldown.currentCharges();
+            if (c < a.cooldown.chargesMax) {
+                ctx.save();
+                var mx = xpos + 25;
+                var my = ypos + 25;
+                ctx.fillStyle = "yellow";
+                ctx.globalAlpha = 0.6;
+                ctx.beginPath();
+                ctx.rect(xpos, ypos, 50, 50);
+                ctx.clip();
+                ctx.beginPath();
+                ctx.moveTo(mx, my);
+                ctx.arc(mx, my, 100, (1.48 + 2 * (c % 1)) % 2 * Math.PI, (1.52 + 2 * (c % 1)) % 2 * Math.PI);
+                ctx.fill();
+                ctx.restore();
+            }
+            ctx.save();
+            ctx.textBaseline = "bottom";
+            ctx.fillStyle = "#BBBBBB";
+            ctx.strokeText(Math.floor(c), xpos + 49, ypos + 49);
+            ctx.fillText(Math.floor(c), xpos + 49, ypos + 49);
+            ctx.restore();
+        }
         ctx.strokeText(a.bind.key.toUpperCase(), xpos + 49, ypos + 1);
         ctx.fillText(a.bind.key.toUpperCase(), xpos + 49, ypos + 1);
         if (cooldownNumbers && cdRem > 0 && cdRem >= gcdRem) {
