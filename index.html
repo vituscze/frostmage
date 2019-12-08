@@ -1490,28 +1490,43 @@ function updateHaste() {
     }
 }
 
-function drawSpiral(p, alpha, neg, x, y, w, h) {
-    var eps = 1e-6;
-    if ((!neg && p > 1.0 - eps) || (neg && p < eps)) {
-        ctx.save();
-        ctx.fillStyle = "black";
-        ctx.globalAlpha = alpha;
-        ctx.fillRect(x, y, w, h);
-        ctx.restore();
-    } else if (p >= eps && p <= 1.0 - eps) {
-        ctx.save();
-        var mx = x + w / 2;
-        var my = y + h / 2;
-        ctx.fillStyle = "black";
-        ctx.globalAlpha = alpha;
-        ctx.beginPath();
-        ctx.rect(x, y, w, h);
-        ctx.clip();
-        ctx.beginPath();
-        ctx.moveTo(mx, my);
-        ctx.arc(mx, my, w + h, (1.5 - 2 * p) % 2 * Math.PI, 1.5 * Math.PI, neg);
-        ctx.fill();
-        ctx.restore();
+function drawSector(start, end, x, y, w, h, color = "black", alpha = 0.6) {
+    ctx.save();
+    var mx = x + w / 2;
+    var my = y + h / 2;
+    ctx.fillStyle = color;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    ctx.beginPath();
+    ctx.moveTo(mx, my);
+    ctx.arc(mx, my, w + h, start, end);
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawRect(x, y, w, h, color = "black", alpha = 0.6) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.globalAlpha = alpha;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+}
+
+function drawBuffSpiral(p, x, y, w, h) {
+    if (p < 1e-5) {
+        drawRect(x, y, w, h);
+    } else if (p <= 1 - 1e-5) {
+        drawSector(1.5 * Math.PI, (3.5 - 2 * p) * Math.PI, x, y, w, h);
+    }
+}
+
+function drawCooldownSpiral(p, x, y, w, h) {
+    if (p > 1 - 1e-5) {
+        drawRect(x, y, w, h);
+    } else if (p >= 1e-5) {
+        drawSector((3.5 - 2 * p) * Math.PI, 3.5 * Math.PI, x, y, w, h);
     }
 }
 
@@ -1834,7 +1849,7 @@ function drawBuffs() {
         }
 
         ctx.drawImage(b.img, xpos, ypos, 45, 45);
-        drawSpiral(b.remains() / b.duration, 0.6, true, xpos, ypos, 45, 45);
+        drawBuffSpiral(b.remains() / b.duration, xpos, ypos, 45, 45);
         if (b.stacksMax > 1) {
             ctx.strokeText(b.currentStack(), xpos + 5, ypos + 40);
             ctx.fillText(b.currentStack(), xpos + 5, ypos + 40);
@@ -1852,7 +1867,7 @@ function drawBuffs() {
         }
 
         ctx.drawImage(b.img, xpos, ypos, 45, 45);
-        drawSpiral(b.remains() / b.duration, 0.6, true, xpos, ypos, 45, 45);
+        drawBuffSpiral(b.remains() / b.duration, xpos, ypos, 45, 45);
         if (b.stacksMax > 1) {
             ctx.strokeText(b.currentStack(), xpos + 5, ypos + 40);
             ctx.fillText(b.currentStack(), xpos + 5, ypos + 40);
@@ -2027,25 +2042,14 @@ function drawAbilityBar() {
 
         ctx.drawImage(a.img, xpos, ypos, 50, 50);
         if (a.onReady && !a.onReady()) {
-            drawSpiral(1.0, 0.6, false, xpos, ypos, 50, 50);
+            drawRect(xpos, ypos, 50, 50);
         }
-        drawSpiral(p, 0.6, false, xpos, ypos, 50, 50);
+        drawCooldownSpiral(p, xpos, ypos, 50, 50);
         if (a.cooldown && a.cooldown.chargesMax > 1) {
             var c = a.cooldown.currentCharges();
             if (c < a.cooldown.chargesMax) {
-                ctx.save();
-                var mx = xpos + 25;
-                var my = ypos + 25;
-                ctx.fillStyle = "yellow";
-                ctx.globalAlpha = 0.6;
-                ctx.beginPath();
-                ctx.rect(xpos, ypos, 50, 50);
-                ctx.clip();
-                ctx.beginPath();
-                ctx.moveTo(mx, my);
-                ctx.arc(mx, my, 100, (1.48 + 2 * (c % 1)) % 2 * Math.PI, (1.52 + 2 * (c % 1)) % 2 * Math.PI);
-                ctx.fill();
-                ctx.restore();
+                var phi = (1.5 + 2 * (c % 1)) * Math.PI;
+                drawSector(phi - 0.06, phi + 0.06, xpos, ypos, 50, 50, "yellow");
             }
             ctx.save();
             ctx.textBaseline = "bottom";
@@ -2056,7 +2060,7 @@ function drawAbilityBar() {
         }
         ctx.strokeText(a.bind.key.toUpperCase(), xpos + 49, ypos + 1);
         ctx.fillText(a.bind.key.toUpperCase(), xpos + 49, ypos + 1);
-        if (cooldownNumbers && cdRem > 0 && cdRem >= gcdRem) {
+        if (cooldownNumbers && cdRem > gcdRem) {
             cdRem /= 1000;
             ctx.save();
             ctx.textAlign = "center";
