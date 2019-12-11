@@ -177,7 +177,7 @@ function linkCheckbox(assign, name) {
     var el = document.getElementById(name);
     assign(el.checked);
     el.addEventListener("change", function(e) {
-        assign(this.checked);
+        assign(el.checked);
         inputChanged = true;
     });
 }
@@ -191,7 +191,6 @@ function toggle(event) {
     }
 }
 
-var enableTooltips;
 linkCheckbox(function(x) { enableTooltips = x; }, "tooltips");
 
 var tt = document.getElementById("tooltip");
@@ -324,6 +323,8 @@ var bfFade = 0.0;
 
 var cooldowns = [];
 var spells = [];
+var buffs = [];
+var debuffs = [];
 
 var lastReady = 0.0;
 var waiting = true;
@@ -337,17 +338,13 @@ var frozenIs = 0;
 var keyBindSpell = null;
 var expireBuff = null;
 
-var targetCount;
 linkSlider(function(x) { targetCount = x; }, "targetCount", 1, function(x) { return x; });
-var aoeWc;
 linkCheckbox(function(x) { aoeWc = x; }, "aoeWc");
 
-var focusBuff;
 linkCheckbox(function(x) { focusBuff = x; }, "focusBuff");
-var focusFof;
 linkCheckbox(function(x) { focusFof = x; }, "focusFof");
 
-function buff(name, stacks, duration, icon) {
+function buff(name, stacks, duration, icon, harmful = false) {
     this.name = name;
     this.stacksMax = stacks;
     this.baseDuration = duration;
@@ -425,6 +422,12 @@ function buff(name, stacks, duration, icon) {
 
     this.img = new Image();
     this.img.src = icon;
+
+    if (harmful) {
+        debuffs.push(this);
+    } else {
+        buffs.push(this);
+    }
 }
 
 function cooldown(charges, duration, hasted = false) {
@@ -1181,12 +1184,8 @@ linkCheckbox(function(x) {
     }
 }, "lonelyWinter");
 
-var abilities = [flurry, frostbolt, iceLance, frozenOrb, blizzard, coneOfCold, glacialSpike, supercool, iceShard, frostBomb, flashFreeze, icyVeins];
-var experimental = [supercool, iceShard, frostBomb, flashFreeze];
-var aoe = [blizzard, coneOfCold];
-
-linkCheckbox(function(x) { for (var a of experimental) { a.enabled = x; } }, "experimentalSpells");
-linkCheckbox(function(x) { for (var a of aoe) { a.enabled = x; } }, "aoeSpells");
+linkCheckbox(function(x) { for (var a of [supercool, iceShard, frostBomb, flashFreeze]) { a.enabled = x; } }, "experimentalSpells");
+linkCheckbox(function(x) { for (var a of [blizzard, coneOfCold]) { a.enabled = x; } }, "aoeSpells");
 
 var bf = new buff("Flurry", 1, 2000, "https://wow.zamimg.com/images/wow/icons/large/ability_mage_brainfreeze.jpg");
 bf.quiet = true;
@@ -1277,13 +1276,12 @@ linkCheckbox(function(x) {
         cocEvent = null;
     }
 }, "cocBuff");
-var buffs = [bf, fof, icicles, iv, si, fr, is, ff, focus, ffocus, sl, coc];
 
-var wc = new buff("Winter's Chill", 1, 1000, "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostward.jpg");
+var wc = new buff("Winter's Chill", 1, 1000, "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostward.jpg", true);
 wc.description = function() {
     return "Taking damage from the Mage's spells as if frozen.";
 };
-var sc = new buff("Supercool", 1, 15000, "https://wow.zamimg.com/images/wow/icons/large/ability_mage_burstofcold.jpg");
+var sc = new buff("Supercool", 1, 15000, "https://wow.zamimg.com/images/wow/icons/large/ability_mage_burstofcold.jpg", true);
 sc.description = function() {
     var desc = "Causes ";
     desc += round(supercool.calculate(0, supercool.snapshotMultiplier(), true).dmg);
@@ -1293,7 +1291,6 @@ sc.description = function() {
 sc.onExpiration = function() {
     supercool.impact();
 };
-var debuffs = [wc, sc];
 
 var manualExpiration = false;
 
@@ -1349,7 +1346,6 @@ function mouseUpdate(e) {
     updateTooltip(false);
 }
 
-var ai;
 linkCheckbox(function(x) { ai = x; }, "ai");
 var aiRisk = 1.0;
 var aiFofPrio = true;
@@ -1556,11 +1552,9 @@ var lastGraph = 0;
 var useGauss = true;
 var drawLines = true;
 
-var samples;
 var lastSamples = null;
 linkSlider(function(x) { samples = x; }, "samples", 1, function(x) { return x; });
 
-var slice;
 var sliceBase = 1.1;
 var lastSlice = null;
 linkSlider(function(x) { slice = 100 * Math.pow(sliceBase, x); }, "slice", 1, x => round(100 * Math.pow(sliceBase, x)) + " ms" );
@@ -1801,16 +1795,17 @@ function drawCastBar() {
 function drawCdProgress() {
     var xpos = uiX;
     var ypos = uiY + 70;
-    var w = (uiW - 10 * (flurry.cooldown.chargesMax - 1)) / flurry.cooldown.chargesMax;
+    var c = Math.max(0, flurry.cooldown.currentCharges());
+    var mc = Math.ceil(flurry.cooldown.chargesMax);
+    var w = (uiW - 10 * (mc - 1)) / mc;
     ctx.save();
     ctx.fillStyle = "#303030";
-    for (var i = 0; i < flurry.cooldown.chargesMax; i++) {
+    for (var i = Math.floor(c); i < mc; i++) {
         ctx.fillRect(xpos + (w + 10) * i, ypos, w, 15);
     }
-    var c = flurry.cooldown.currentCharges();
     ctx.fillStyle = "#3065BA";
-    for (var i = 0; i < flurry.cooldown.chargesMax; i++) {
-        ctx.fillRect(xpos + (w + 10) * i, ypos, Math.max(0, Math.min(c - i, 1)) * w, 15);
+    for (var i = 0; i < Math.ceil(c); i++) {
+        ctx.fillRect(xpos + (w + 10) * i, ypos, Math.min(c - i, 1) * w, 15);
     }
     ctx.restore();
 }
@@ -1914,17 +1909,17 @@ function drawDamage() {
     }
 
     var hits = [];
+    var hitTime = 3000;
     var crits = [];
+    var critTime = 2000;
 
     for (var i = combatLog.length - 1; i >= 0; i--) {
         var e = combatLog[i];
 
-        var critTime = 2000;
         if (crits.length < maxCrits && !e.merged && e.result.crit && t - e.time <= critTime) {
             crits.push({event : e, progress : (t - e.time) / critTime});
         }
 
-        var hitTime = 3000;
         if (hits.length < maxHits && (e.merged || !e.result.crit) && t - e.time <= hitTime) {
             hits.push({event : e, progress : (t - e.time) / hitTime});
         }
@@ -2000,13 +1995,13 @@ function drawDamage() {
 var cooldownNumbers = true;
 
 function drawAbilityBar() {
-    var filtered = 0;
-    for (var a of abilities) {
-        if (a.enabled) {
-            filtered++;
+    var abilities = [];
+    for (var s of spells) {
+        if (s.bind && s.enabled) {
+            abilities.push(s);
         }
     }
-    var xpos = uiX + uiW / 2 - (filtered * 56 - 6) / 2;
+    var xpos = uiX + uiW / 2 - (abilities.length * 56 - 6) / 2;
     var ypos = uiY + 230;
     ctx.save();
     ctx.lineWidth = 3;
@@ -2015,14 +2010,8 @@ function drawAbilityBar() {
     ctx.font = "16px Arial";
     abilityBar = [];
     for (var a of abilities) {
-        if (!a.enabled) {
-            continue;
-        }
         var gcdRem = Math.max(0, gcdEnd - t);
-        var cdRem = 0.0;
-        if (a.cooldown) {
-            cdRem = a.cooldown.readyIn(1);
-        }
+        var cdRem = a.cooldown ? a.cooldown.readyIn(1) : 0;
 
         var p;
         if (gcdRem == 0.0 && cdRem == 0.0) {
@@ -2047,15 +2036,16 @@ function drawAbilityBar() {
         drawCooldownSpiral(p, xpos, ypos, 50, 50);
         if (a.cooldown && a.cooldown.chargesMax > 1) {
             var c = a.cooldown.currentCharges();
-            if (c < a.cooldown.chargesMax) {
+            if (c < Math.ceil(a.cooldown.chargesMax)) {
                 var phi = (1.5 + 2 * (c % 1)) * Math.PI;
                 drawSector(phi - 0.06, phi + 0.06, xpos, ypos, 50, 50, "yellow");
             }
             ctx.save();
             ctx.textBaseline = "bottom";
             ctx.fillStyle = "#BBBBBB";
-            ctx.strokeText(Math.floor(c), xpos + 49, ypos + 49);
-            ctx.fillText(Math.floor(c), xpos + 49, ypos + 49);
+            var text = Math.floor(Math.max(0, c));
+            ctx.strokeText(text, xpos + 49, ypos + 49);
+            ctx.fillText(text, xpos + 49, ypos + 49);
             ctx.restore();
         }
         ctx.strokeText(a.bind.key.toUpperCase(), xpos + 49, ypos + 1);
@@ -2171,8 +2161,9 @@ function drawStats() {
         ctx.font = "15px Arial";
         ctx.fillText("Proc waste breakdown", xpos, ypos - 5);
         ctx.restore();
+        var wastedFlurry = flurry.cooldown.wastedProgress();
         ctx.drawImage(flurry.img, xpos, ypos, 20, 20);
-        ctx.fillText(flurry.cooldown.wastedProgress().toFixed(1) + " (" + round(100 * flurry.cooldown.wastedProgress() / (flurry.cooldown.normalProgress() || 1)) + "%)", xpos + 25, ypos + 17);
+        ctx.fillText(wastedFlurry.toFixed(1) + " (" + round(100 * wastedFlurry / (flurry.cooldown.normalProgress() || 1)) + "%)", xpos + 25, ypos + 17);
         var wastedFof = fof.triggerCount - frozenIlFof - flashFreeze.stats.executed - fof.currentStack();
         ctx.drawImage(fof.img, xpos, ypos + 21, 20, 20);
         ctx.fillText(wastedFof + " (" + round(100 * wastedFof / (fof.triggerCount || 1)) + "%)", xpos + 25, ypos + 38);
@@ -2359,22 +2350,7 @@ function handleEvents(time) {
     }
 }
 
-var detailedStats;
-linkCheckbox(function(x) { detailedStats = x; }, "stats");
-
-var renderTime = 0.0;
-var lastRenderTime = 0.0;
-
-var lastTime = 0;
-var speedupBase = 1.3;
-var speed;
-linkSlider(function(x) { speed = Math.pow(speedupBase, x); }, "speedFactor", 1, x => Math.pow(speedupBase, x).toFixed(2) );
-
-var timeline;
-linkCheckbox(function(x) { timeline = x; }, "timeline");
-
-var lastUpdateTime = 0;
-var pause = 0;
+var paused = true;
 
 function handleUserInput() {
     if (inputChanged) {
@@ -2390,19 +2366,29 @@ function handleUserInput() {
     }
     if (queuedSpell) {
         scheduleReady();
-        pause = 1.0;
+        paused = false;
     }
 }
 
+var speedupBase = 1.3;
+linkSlider(function(x) { speed = Math.pow(speedupBase, x); }, "speedFactor", 1, x => Math.pow(speedupBase, x).toFixed(2) );
+linkCheckbox(function(x) { detailedStats = x; }, "stats");
+linkCheckbox(function(x) { timeline = x; }, "timeline");
+
+var renderTime = 0.0;
+var lastTime = 0;
+
 function draw(time) {
-    var realDelta = time - lastTime;
+    requestAnimationFrame(draw);
+
+    delta = paused ? 0 : Math.min(100, time - lastTime) * speed;
     lastTime = time;
-    renderTime = lastRenderTime + pause * Math.min(100, realDelta) * speed;
+    renderTime += delta;
+
     handleUserInput();
     handleEvents(renderTime);
 
     t = renderTime;
-    delta = renderTime - lastRenderTime;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawProcs();
     drawCastBar();
@@ -2418,16 +2404,10 @@ function draw(time) {
     if (detailedStats) {
         drawStats();
     }
-    if (time > lastUpdateTime + 100) {
-        lastUpdateTime = time;
-        updateTooltip(true);
-    }
-    lastRenderTime = renderTime;
-
-    requestAnimationFrame(draw);
 }
 
 requestAnimationFrame(draw);
+setInterval(updateTooltip, 100, true);
 
 function demonstrationBfa() {
     flurry.cooldown.baseDuration = 1e9;
