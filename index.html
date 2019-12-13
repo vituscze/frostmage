@@ -817,37 +817,6 @@ iceLance.description = function() {
     return desc;
 };
 
-var glacialSpike = new spell("Glacial Spike", "https://wow.zamimg.com/images/wow/icons/large/ability_mage_glacialspike.jpg", {key : "q", code : "KeyQ"}, 3000, 1.68, null,
-    function() {
-        icicles.expire(true);
-        var tgts = this.targets();
-        addEvent(t + 200 + 1000 * distance / 50, function() { glacialSpike.impact(tgts); });
-    });
-glacialSpike.onReady = function() {
-    return icicles.currentStack() == icicles.stacksMax;
-};
-glacialSpike.targets = function() {
-    if (si.currentStack() > 0) {
-        return siTargets;
-    } else {
-        return 1;
-    }
-};
-glacialSpike.coef = function() {
-    return this.baseCoef + icicles.stacksMax * icicle.coef();
-};
-glacialSpike.description = function() {
-    var desc = "Conjures a massive spike of ice, and merges your current Icicles into it. It impales your target, dealing ";
-    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg);
-    desc += " Frost damage, and freezes the target in place for 4 sec. Damage may interrupt the freeze effect.";
-    desc += "\n\n";
-    desc += "Requires ";
-    desc += icicles.stacksMax;
-    desc += " Icicles to cast.";
-    return desc;
-};
-linkCheckbox(function(x) { glacialSpike.enabled = x; }, "glacialSpike");
-
 var frozenOrb = new spell("Frozen Orb", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frozenorb.jpg", {key : "4", code : "Digit4"}, 0, 0.09, new cooldown(1, 60000),
     function() {
         if (this.freezingRain) {
@@ -926,48 +895,6 @@ icicle.gain = function() {
 };
 frostbolt.children.push(icicle);
 
-var icyVeins = new spell("Icy Veins", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_coldhearted.jpg", {key : "r", code : "KeyR"}, 0, 0, new cooldown(1, 180000),
-    function() {
-        iv.trigger();
-    });
-icyVeins.description = function() {
-    var desc = "Accelerates your spellcasting for ";
-    desc += timeString(iv.baseDuration);
-    desc += ", granting 30% haste";
-    if (flurry.cooldown.ivRecharge > 0) {
-        desc += ", increasing your Flurry recharge rate by ";
-        desc += round(flurry.cooldown.ivRecharge * 100);
-        desc += "%";
-    }
-    desc += " and preventing damage from delaying your spellcasts.";
-    return desc;
-};
-
-var supercool = new spell("Supercool", "https://wow.zamimg.com/images/wow/icons/large/ability_mage_burstofcold.jpg", {key : "f", code : "KeyF"}, 1500, 0.6, new cooldown(1, 30000, true),
-    function() {
-        sc.expire(true);
-        this.fof = 0;
-        sc.trigger(hasteMult * sc.baseDuration);
-    });
-supercool.genericMultiplier = function(target) {
-    return 1.0 + 0.5 * this.fof;
-};
-supercool.fof = 0;
-supercool.description = function() {
-    var desc = "Supercools the target, dealing ";
-    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg / this.genericMultiplier(0));
-    desc += " Frost damage after ";
-    desc += timeString(sc.baseDuration * hasteMult);
-    desc += " or when a Flurry strikes the target.";
-    desc += "\n\n";
-    desc += "While active, Ice Lances";
-    if (flashFreeze.enabled) {
-        desc += " and Flash Freezes";
-    }
-    desc += " that benefit from Shatter will increase the damage of Supercool by 50%.";
-    return desc;
-};
-
 var blizzard = new spell("Blizzard", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_icestorm.jpg", {key : "e", code : "KeyE"}, 2000, 0.06, new cooldown(1, 8000, true),
     function() {
         si.trigger();
@@ -1014,6 +941,80 @@ blizzard.description = function() {
         desc += timeString(this.cdr);
         desc += ".";
     }
+    return desc;
+};
+
+var coneOfCold = new spell("Cone of Cold", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_glacier.jpg", {key : "z", code : "KeyZ"}, 0, 0.3, new cooldown(1, 12000),
+    function() {
+        this.impact();
+        coc.expire(true);
+    });
+coneOfCold.targets = function() {
+    return 255;
+};
+coneOfCold.genericMultiplier = function(target) {
+    return 1.0 + 0.1 * coc.currentStack();
+};
+coneOfCold.description = function() {
+    var desc = "Targets in a cone in front of you take ";
+    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage and have movement slowed by 70% for 5 sec.";
+    return desc;
+};
+
+var glacialSpike = new spell("Glacial Spike", "https://wow.zamimg.com/images/wow/icons/large/ability_mage_glacialspike.jpg", {key : "q", code : "KeyQ"}, 3000, 1.68, null,
+    function() {
+        icicles.expire(true);
+        var tgts = this.targets();
+        addEvent(t + 200 + 1000 * distance / 50, function() { glacialSpike.impact(tgts); });
+    });
+glacialSpike.onReady = function() {
+    return icicles.currentStack() == icicles.stacksMax;
+};
+glacialSpike.targets = function() {
+    if (si.currentStack() > 0) {
+        return siTargets;
+    } else {
+        return 1;
+    }
+};
+glacialSpike.coef = function() {
+    return this.baseCoef + icicles.stacksMax * icicle.coef();
+};
+glacialSpike.description = function() {
+    var desc = "Conjures a massive spike of ice, and merges your current Icicles into it. It impales your target, dealing ";
+    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg);
+    desc += " Frost damage, and freezes the target in place for 4 sec. Damage may interrupt the freeze effect.";
+    desc += "\n\n";
+    desc += "Requires ";
+    desc += icicles.stacksMax;
+    desc += " Icicles to cast.";
+    return desc;
+};
+linkCheckbox(function(x) { glacialSpike.enabled = x; }, "glacialSpike");
+
+var supercool = new spell("Supercool", "https://wow.zamimg.com/images/wow/icons/large/ability_mage_burstofcold.jpg", {key : "f", code : "KeyF"}, 1500, 0.6, new cooldown(1, 30000, true),
+    function() {
+        sc.expire(true);
+        this.fof = 0;
+        sc.trigger(hasteMult * sc.baseDuration);
+    });
+supercool.genericMultiplier = function(target) {
+    return 1.0 + 0.5 * this.fof;
+};
+supercool.fof = 0;
+supercool.description = function() {
+    var desc = "Supercools the target, dealing ";
+    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg / this.genericMultiplier(0));
+    desc += " Frost damage after ";
+    desc += timeString(sc.baseDuration * hasteMult);
+    desc += " or when a Flurry strikes the target.";
+    desc += "\n\n";
+    desc += "While active, Ice Lances";
+    if (flashFreeze.enabled) {
+        desc += " and Flash Freezes";
+    }
+    desc += " that benefit from Shatter will increase the damage of Supercool by 50%.";
     return desc;
 };
 
@@ -1109,24 +1110,6 @@ flashFreeze.description = function() {
     return desc;
 };
 
-var coneOfCold = new spell("Cone of Cold", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_glacier.jpg", {key : "z", code : "KeyZ"}, 0, 0.3, new cooldown(1, 12000),
-    function() {
-        this.impact();
-        coc.expire(true);
-    });
-coneOfCold.targets = function() {
-    return 255;
-};
-coneOfCold.genericMultiplier = function(target) {
-    return 1.0 + 0.1 * coc.currentStack();
-};
-coneOfCold.description = function() {
-    var desc = "Targets in a cone in front of you take ";
-    desc += round(this.calculate(0, this.snapshotMultiplier(), true).dmg);
-    desc += " Frost damage and have movement slowed by 70% for 5 sec.";
-    return desc;
-};
-
 var waterbolt = new spell("Waterbolt", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostbolt.jpg", null, 2500, 0.135, null,
     function() {
         this.impact();
@@ -1163,6 +1146,23 @@ lonelyWinter.trigger = function() {
         this.lastProc = t;
         this.execute();
     }
+};
+
+var icyVeins = new spell("Icy Veins", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_coldhearted.jpg", {key : "r", code : "KeyR"}, 0, 0, new cooldown(1, 180000),
+    function() {
+        iv.trigger();
+    });
+icyVeins.description = function() {
+    var desc = "Accelerates your spellcasting for ";
+    desc += timeString(iv.baseDuration);
+    desc += ", granting 30% haste";
+    if (flurry.cooldown.ivRecharge > 0) {
+        desc += ", increasing your Flurry recharge rate by ";
+        desc += round(flurry.cooldown.ivRecharge * 100);
+        desc += "%";
+    }
+    desc += " and preventing damage from delaying your spellcasts.";
+    return desc;
 };
 
 var waterboltEvent = null;
@@ -1530,19 +1530,19 @@ var colors =
     [ "rgb(128,133,133)"
     , "rgb(132,186,91)"
     , "rgb(144,103,167)"
-    , "rgb(211,94,96)"
     , "rgb(225,151,76)"
     , "rgb(204,194,16)"
-    , "rgb(0,0,0)"
-    , "rgb(142,95,156)"
     , "rgb(122,194,148)"
+    , "rgb(95,115,161)"
+    , "rgb(211,94,96)"
+    , "rgb(142,95,156)"
     , "rgb(217,150,126)"
     , "rgb(156,61,61)"
     , "rgb(156,61,61)"
     , "rgb(186,130,176)"
-    , "rgb(95,115,161)"
     , "rgb(114,147,203)"
     , "rgb(171,104,87)"
+    , "rgb(0,0,0)"
     ]
 
 var graph = [];
@@ -1796,11 +1796,11 @@ function drawCdProgress() {
     var xpos = uiX;
     var ypos = uiY + 70;
     var c = Math.max(0, flurry.cooldown.currentCharges());
-    var mc = Math.ceil(flurry.cooldown.chargesMax);
-    var w = (uiW - 10 * (mc - 1)) / mc;
+    var cm = Math.ceil(flurry.cooldown.chargesMax);
+    var w = (uiW - 10 * (cm - 1)) / cm;
     ctx.save();
     ctx.fillStyle = "#303030";
-    for (var i = Math.floor(c); i < mc; i++) {
+    for (var i = Math.floor(c); i < cm; i++) {
         ctx.fillRect(xpos + (w + 10) * i, ypos, w, 15);
     }
     ctx.fillStyle = "#3065BA";
@@ -2326,15 +2326,19 @@ function moveEvent(t, e) {
         while (prev && prev.time > t) {
             prev = prev.prev;
         }
-        unlink(e);
-        linkAfter(e, prev);
+        if (prev != e.prev) {
+            unlink(e);
+            linkAfter(e, prev);
+        }
     } else if (t > e.time) {
         var next = e.next;
         while (next && next.time <= t) {
             next = next.next;
         }
-        unlink(e);
-        linkBefore(e, next);
+        if (next != e.next) {
+            unlink(e);
+            linkBefore(e, next);
+        }
     }
 
     e.time = t;
@@ -2395,10 +2399,8 @@ function draw(time) {
     drawCdProgress();
     drawIcicles();
     drawBuffs();
-    if (timeline) {
-        drawDpsTimeline();
-    } else {
-        drawDamage();
+    if (combatLog) {
+        timeline ? drawDpsTimeline() : drawDamage();
     }
     drawAbilityBar();
     if (detailedStats) {
