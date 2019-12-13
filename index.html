@@ -1746,34 +1746,31 @@ function drawDpsTimeline() {
 }
 
 function drawCastBar() {
+    ctx.save();
     if (castEnd > t) {
         var xpos = uiX;
         var ypos = uiY;
         var progress = 1 - (castEnd - t) / (castEnd - castStart);
-        ctx.save();
         ctx.fillStyle = "#303030";
         ctx.fillRect(xpos, ypos, uiW, 50);
         ctx.fillStyle = "#505050";
         ctx.fillRect(xpos, ypos, progress * uiW, 50);
-        ctx.fillStyle = "#AAAAAA";
+        ctx.fillStyle = "#CCCCCC";
         ctx.fillRect(xpos + progress * (uiW - 3), ypos, 3, 50);
         ctx.font = "30px Arial";
         ctx.fillStyle = "white";
         ctx.textBaseline = "middle";
         ctx.strokeText(castSpell.name, xpos + 10, ypos + 25);
         ctx.fillText(castSpell.name, xpos + 10, ypos + 25);
-        ctx.restore();
     }
     if (gcdEnd > t) {
         var xpos = uiX;
         var ypos = uiY + 50;
         var progress = 1 - (gcdEnd - t) / (gcdEnd - gcdStart);
-        ctx.save();
         ctx.fillStyle = "#303030";
         ctx.fillRect(xpos, ypos + 1, uiW, 9);
-        ctx.fillStyle = "white";
+        ctx.fillStyle = "#CCCCCC";
         ctx.fillRect(xpos + progress * (uiW - 3), ypos + 1, 3, 9);
-        ctx.restore();
     }
     var iconSpell = castSpell || lastSpell;
     if (iconSpell) {
@@ -1790,6 +1787,7 @@ function drawCastBar() {
             ctx.restore();
         }
     }
+    ctx.restore();
 }
 
 function drawCdProgress() {
