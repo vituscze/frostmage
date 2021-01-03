@@ -300,7 +300,7 @@ var eventTail = null;
 var combatLog = [];
 
 var stats = {};
-stats.intellect = 22399 * 1.02 * 1.05;
+stats.intellect = 2500 * 1.15 * 1.05;
 linkSlider(function(x) { stats.crit = x; }, "crit", 0.01, pctString);
 linkSlider(function(x) { stats.haste = x; }, "haste", 0.01, pctString);
 linkSlider(function(x) { stats.mastery = x; }, "mastery", 0.01, pctString);
@@ -309,7 +309,7 @@ stats.vers = 0.1923;
 var hasteMult = 1.0 / (1.0 + stats.haste);
 var siTargets = 2;
 
-var queuedSpell = null;
+var queuedSpells = [];
 var lastSpell = null;
 var castSpell = null;
 var castStart = 0;
@@ -1152,6 +1152,7 @@ var icyVeins = new spell("Icy Veins", "https://wow.zamimg.com/images/wow/icons/l
     function() {
         iv.trigger();
     });
+icyVeins.gcd = function() { return 0.0; };
 icyVeins.description = function() {
     var desc = "Accelerates your spellcasting for ";
     desc += timeString(iv.baseDuration);
@@ -1299,6 +1300,16 @@ document.addEventListener("mousedown", mouseDown);
 document.addEventListener("mousemove", mouseUpdate);
 document.addEventListener("mouseenter", mouseUpdate);
 
+function queueSpell(spell) {
+    if (queuedSpells.includes(spell)) {
+        return;
+    }
+    if (spell.gcd() > 0.0) {
+        queuedSpells = queuedSpells.filter(s => s.gcd() == 0.0);
+    }
+    queuedSpells.push(spell);
+}
+
 function keyDown(e) {
     if (e.repeat) {
         return;
@@ -1312,7 +1323,7 @@ function keyDown(e) {
 
     for (var b of abilityBar) {
         if (e.code == b.ability.bind.code) {
-            queuedSpell = b.ability;
+            queueSpell(b.ability);
             return;
         }
     }
@@ -1324,7 +1335,7 @@ function mouseDown(e) {
             if (e.shiftKey) {
                 keyBindSpell = b.ability;
             } else {
-                queuedSpell = b.ability;
+                queueSpell(b.ability);
             }
             return;
         }
@@ -1356,7 +1367,7 @@ var castEvent = null;
 
 function castChoose() {
     aiEvent = null;
-    if (!ai || queuedSpell) {
+    if (!ai || queuedSpells.length) {
         return;
     }
 
@@ -1376,12 +1387,16 @@ function castChoose() {
     var gsCondition = flurry.cooldown.readyIn(1) <= rem + glacialSpike.castTime()
                    && (icicles.currentStack() == icicles.stacksMax || icicles.currentStack() == icicles.stacksMax - 1 && castSpell == frostbolt);
 
+    if (icyVeins.cooldown.readyIn(1) <= rem) {
+        queuedSpells.push(icyVeins);
+    }
+
+    var queuedSpell = null;
+
     if (!castSpell && lastSpell == flurry) {
         queuedSpell = iceLance;
     } else if (flurry.cooldown.readyIn(1) <= rem && castSpell == glacialSpike) {
         queuedSpell = flurry;
-    } else if (icyVeins.cooldown.readyIn(1) <= rem) {
-        queuedSpell = icyVeins;
     } else if (frozenOrb.cooldown.readyIn(1) <= rem) {
         queuedSpell = frozenOrb;
     } else if (blizzard.enabled && castSpell != blizzard && blizzard.cooldown.readyIn(1) <= rem && targetCount > 1) {
@@ -1397,6 +1412,16 @@ function castChoose() {
     } else {
         queuedSpell = frostbolt;
     }
+
+    queuedSpells.push(queuedSpell);
+}
+
+function castOGCD() {
+    var ogcd = queuedSpells.filter(s => s.gcd() == 0.0 && s.ready());
+    for (var s of ogcd) {
+        s.execute();
+    }
+    queuedSpells = queuedSpells.filter(s => s.gcd() > 0.0);
 }
 
 function castBegin() {
@@ -1408,19 +1433,21 @@ function castBegin() {
     } else if (lastSpell) {
         lastSpell.stats.time += spent;
     }
-    if (!queuedSpell) {
+
+    castOGCD();
+
+    if (!queuedSpells.length) {
         waiting = true;
         return;
     }
 
-    if (queuedSpell.ready()) {
+    if (queuedSpells[0].ready()) {
         waiting = false;
+        castSpell = queuedSpells.shift();
         castStart = t;
-        castEnd = t + queuedSpell.castTime();
+        castEnd = t + castSpell.castTime();
         gcdStart = t;
-        gcdEnd = t + queuedSpell.gcd();
-        castSpell = queuedSpell;
-        queuedSpell = null;
+        gcdEnd = t + castSpell.gcd();
 
         scheduleCast();
         scheduleAi();
@@ -1439,7 +1466,7 @@ function castFinish() {
 }
 
 function scheduleAi() {
-    if (!ai || aiEvent || queuedSpell) {
+    if (!ai || aiEvent || queuedSpells.length) {
         return;
     }
 
@@ -2012,15 +2039,15 @@ function drawAbilityBar() {
         var cdRem = a.cooldown ? a.cooldown.readyIn(1) : 0;
 
         var p;
-        if (gcdRem == 0.0 && cdRem == 0.0) {
+        if ((a.gcd() == 0.0 || gcdRem == 0.0) && cdRem == 0.0) {
             p = 0.0;
-        } else if (gcdRem >= cdRem) {
+        } else if (a.gcd() > 0.0 && gcdRem >= cdRem) {
             p = gcdRem / (gcdEnd - gcdStart);
         } else {
             p = cdRem / a.cooldown.duration;
         }
 
-        if (a == queuedSpell || a == keyBindSpell) {
+        if (queuedSpells.includes(a) || a == keyBindSpell) {
             ctx.save();
             ctx.fillStyle = a == keyBindSpell ? "red" : "yellow";
             ctx.fillRect(xpos - 1, ypos - 1, 52, 52);
@@ -2363,10 +2390,13 @@ function handleUserInput() {
         expireBuff.expire(true);
         expireBuff = null;
     }
-    if (!queuedSpell && ai) {
+    if (!queuedSpells.length && ai) {
         scheduleAi();
     }
-    if (queuedSpell) {
+    if (queuedSpells.length) {
+        if (!castEvent) {
+            castOGCD();
+        }
         scheduleReady();
         paused = false;
     }
