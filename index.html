@@ -300,7 +300,7 @@ var eventTail = null;
 var combatLog = [];
 
 var stats = {};
-stats.intellect = 2500 * 1.26 * 1.05;
+stats.intellect = 2500 * 1.05;
 linkSlider(function(x) { stats.crit = x; }, "crit", 0.01, pctString);
 linkSlider(function(x) { stats.haste = x; }, "haste", 0.01, pctString);
 linkSlider(function(x) { stats.mastery = x; }, "mastery", 0.01, pctString);
@@ -682,7 +682,7 @@ function spell(name, icon, bind, castTime, coef, cd, onExecute) {
     spells.push(this);
 }
 
-var flurry = new spell("Flurry", "https://wow.zamimg.com/images/wow/icons/large/ability_warlock_burningembersblue.jpg", {key : "1", code : "Digit1"}, 0, 0.24, new cooldown(2, 20000),
+var flurry = new spell("Flurry", "https://wow.zamimg.com/images/wow/icons/large/ability_warlock_burningembersblue.jpg", {key : "1", code : "Digit1"}, 0, 0.32, new cooldown(2, 20000),
     function() {
         var mult = Math.max(0.5, hasteMult);
         if (this.munchProtection) {
@@ -722,7 +722,7 @@ linkSlider(function(x) { flurry.cooldown.baseDuration = x; }, "flurryCd", 1000, 
 linkSlider(function(x) { flurry.cooldown.chargesMax = x; }, "flurryCharges", 1, function(x) { return x; });
 linkCheckbox(function(x) { flurry.munchProtection = x; }, "munchProtection");
 
-var frostbolt = new spell("Frostbolt", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostbolt02.jpg", {key : "2", code : "Digit2"}, 2000, 0.42, null,
+var frostbolt = new spell("Frostbolt", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostbolt02.jpg", {key : "2", code : "Digit2"}, 2000, 0.52, null,
     function() {
         if (Math.random() < this.bfProcChance[Math.min(this.bfProcChance.length - 1, this.counter)]) {
             this.counter = 0;
@@ -766,7 +766,7 @@ linkSlider(function(x) { frostbolt.bfProcChance = [x]; }, "bfChance", 0.01, pctS
 linkCheckbox(function(x) { frostbolt.bfDelay = x; }, "bfDelay");
 linkCheckbox(function(x) { frostbolt.shatterlance = x; }, "shatterlance");
 
-var iceLance = new spell("Ice Lance", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostblast.jpg", {key : "3", code : "Digit3"}, 0, 0.24, null,
+var iceLance = new spell("Ice Lance", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostblast.jpg", {key : "3", code : "Digit3"}, 0, 0.32, null,
     function() {
         var fofUp = bf.currentStack() == 0 && fof.currentStack() > 0;
         if (fofUp) {
@@ -833,7 +833,7 @@ iceLance.description = function() {
     return desc;
 };
 
-var frozenOrb = new spell("Frozen Orb", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frozenorb.jpg", {key : "4", code : "Digit4"}, 0, 0.09, new cooldown(1, 60000),
+var frozenOrb = new spell("Frozen Orb", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frozenorb.jpg", {key : "4", code : "Digit4"}, 0, 0.12, new cooldown(1, 60000),
     function() {
         if (this.freezingRain) {
             fr.trigger();
@@ -873,7 +873,7 @@ frozenOrb.description = function() {
 };
 linkCheckbox(function(x) { frozenOrb.freezingRain = x; }, "freezingRain");
 
-var icicle = new spell("Icicle", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_iceshard.jpg", null, 0, 0.18, null,
+var icicle = new spell("Icicle", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_iceshard.jpg", null, 0, 0.24, null,
     function() {
         var tgts = this.targets();
         addEvent(t + 1000 * distance / 50, function() { icicle.impact(tgts); });
@@ -911,7 +911,7 @@ icicle.gain = function() {
 };
 frostbolt.children.push(icicle);
 
-var blizzard = new spell("Blizzard", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_icestorm.jpg", {key : "e", code : "KeyE"}, 2000, 0.06, new cooldown(1, 8000, true),
+var blizzard = new spell("Blizzard", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_icestorm.jpg", {key : "e", code : "KeyE"}, 2000, 0.08, new cooldown(1, 8000, true),
     function() {
         si.trigger();
         var ticks = 0;
@@ -960,7 +960,7 @@ blizzard.description = function() {
     return desc;
 };
 
-var coneOfCold = new spell("Cone of Cold", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_glacier.jpg", {key : "z", code : "KeyZ"}, 0, 0.3, new cooldown(1, 12000),
+var coneOfCold = new spell("Cone of Cold", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_glacier.jpg", {key : "z", code : "KeyZ"}, 0, 0.4, new cooldown(1, 12000),
     function() {
         this.impact();
         coc.expire(true);
@@ -978,7 +978,7 @@ coneOfCold.description = function() {
     return desc;
 };
 
-var glacialSpike = new spell("Glacial Spike", "https://wow.zamimg.com/images/wow/icons/large/ability_mage_glacialspike.jpg", {key : "q", code : "KeyQ"}, 3000, 1.68, null,
+var glacialSpike = new spell("Glacial Spike", "https://wow.zamimg.com/images/wow/icons/large/ability_mage_glacialspike.jpg", {key : "q", code : "KeyQ"}, 3000, 2.24, null,
     function() {
         icicles.expire(true);
         var tgts = this.targets();
@@ -1009,7 +1009,7 @@ glacialSpike.description = function() {
 };
 linkCheckbox(function(x) { glacialSpike.enabled = x; }, "glacialSpike");
 
-var supercool = new spell("Supercool", "https://wow.zamimg.com/images/wow/icons/large/ability_mage_burstofcold.jpg", {key : "f", code : "KeyF"}, 1500, 0.6, new cooldown(1, 30000, true),
+var supercool = new spell("Supercool", "https://wow.zamimg.com/images/wow/icons/large/ability_mage_burstofcold.jpg", {key : "f", code : "KeyF"}, 1500, 0.8, new cooldown(1, 30000, true),
     function() {
         sc.expire(true);
         this.fof = 0;
@@ -1034,7 +1034,7 @@ supercool.description = function() {
     return desc;
 };
 
-var iceShard = new spell("Ice Shard", "https://wow.zamimg.com/images/wow/icons/large/artifactability_frostmage_blackicicles.jpg", {key : "c", code : "KeyC"}, 0, 0.5, new cooldown(1, 45000, true),
+var iceShard = new spell("Ice Shard", "https://wow.zamimg.com/images/wow/icons/large/artifactability_frostmage_blackicicles.jpg", {key : "c", code : "KeyC"}, 0, 0.72, new cooldown(1, 45000, true),
     function() {
         addEvent(t + 1000 * distance / 50, function() {
             iceShard.impact();
@@ -1069,7 +1069,7 @@ frostBombExplosion.calculate = function(target, multiplier, tt) {
 frostBombExplosion.targets = function() {
     return 255;
 };
-var frostBomb = new spell("Frost Bomb", "https://wow.zamimg.com/images/wow/icons/large/spell_mage_frostbomb.jpg", {key : "x", code : "KeyX"}, 2000, 1.0, new cooldown(1, 30000, true),
+var frostBomb = new spell("Frost Bomb", "https://wow.zamimg.com/images/wow/icons/large/spell_mage_frostbomb.jpg", {key : "x", code : "KeyX"}, 2000, 1.32, new cooldown(1, 30000, true),
     function() {
         addEvent(t + 200 + 1000 * distance / 50, function() {
             frostBomb.impact();
@@ -1089,7 +1089,7 @@ frostBomb.description = function() {
     return desc;
 };
 
-var flashFreeze = new spell("Flash Freeze", "https://wow.zamimg.com/images/wow/icons/large/ability_deathknight_frozencenter.jpg", {key : "v", code : "KeyV"}, 0, 0.25, null,
+var flashFreeze = new spell("Flash Freeze", "https://wow.zamimg.com/images/wow/icons/large/ability_deathknight_frozencenter.jpg", {key : "v", code : "KeyV"}, 0, 0.32, null,
     function() {
         this.impact();
         fof.expire(false);
@@ -1131,7 +1131,7 @@ flashFreeze.description = function() {
     return desc;
 };
 
-var waterbolt = new spell("Waterbolt", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostbolt.jpg", null, 2500, 0.135, null,
+var waterbolt = new spell("Waterbolt", "https://wow.zamimg.com/images/wow/icons/large/spell_frost_frostbolt.jpg", null, 2500, 0.18, null,
     function() {
         this.impact();
     });
@@ -1143,7 +1143,7 @@ waterbolt.critMultiplier = function() {
 };
 waterbolt.disabledProcs = true;
 
-var lonelyWinter = new spell("Lonely Winter", "https://wow.zamimg.com/images/wow/icons/large/achievement_dungeon_frozenthrone.jpg", null, 0, 0.25, null,
+var lonelyWinter = new spell("Lonely Winter", "https://wow.zamimg.com/images/wow/icons/large/achievement_dungeon_frozenthrone.jpg", null, 0, 0.32, null,
     function() {
         this.impact();
     });
