@@ -308,6 +308,7 @@ stats.vers = 0.1923;
 
 var hasteMult = 1.0 / (1.0 + stats.haste);
 var siTargets = 2;
+var shatterCrit = false;
 
 var queuedSpells = [];
 var lastSpell = null;
@@ -607,8 +608,12 @@ function spell(name, icon, bind, castTime, coef, cd, onExecute) {
     this.critChance = function(target) {
         var c = stats.crit;
         if (this.frozen(target)) {
-            c *= 1.5;
-            c += 0.5;
+            if (shatterCrit) {
+                c += 1.0;
+            } else {
+                c *= 1.5;
+                c += 0.5;
+            }
         }
         return c;
     };
@@ -627,17 +632,24 @@ function spell(name, icon, bind, castTime, coef, cd, onExecute) {
     };
     this.calculate = function(target, multiplier, tt) {
         var d = this.coef() * stats.intellect;
-        var f = !tt && this.frozen(target);
-        if (f) {
-            d *= this.frozenMultiplier(target);
-        }
-        d *= this.genericMultiplier(target);
-        d *= multiplier;
-        d *= 1.0 + stats.vers;
-        var c = !tt && Math.random() < this.critChance(target);
+
+        var cc = this.critChance(target);
+        var c = !tt && Math.random() < cc;
         if (c) {
             d *= this.critMultiplier();
         }
+
+        var f = !tt && this.frozen(target);
+        if (f) {
+            d *= this.frozenMultiplier(target);
+            if (shatterCrit) {
+                d *= Math.max(cc, 1.0);
+            }
+        }
+
+        d *= this.genericMultiplier(target);
+        d *= multiplier;
+        d *= 1.0 + stats.vers;
         return {dmg : d, crit : c, frozen : f};
     };
     this.onImpact = null;
